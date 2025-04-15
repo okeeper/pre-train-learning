@@ -1,72 +1,72 @@
-# 自注意力机制预训练代码示例
+# 小说问答数据集生成工具
 
-这个项目提供了一个基于PyTorch实现的自注意力机制预训练代码示例，旨在帮助初学者理解Transformer模型中自注意力机制的工作原理和预训练过程。
+本工具用于从小说文本生成问答数据集，使用OpenAI API生成高质量的问答对。
 
 ## 环境配置
 
-### Python虚拟环境创建
-
+### 1. 创建并激活conda环境
 ```bash
-# 创建虚拟环境
-python -m venv venv
+# 创建Python环境
+conda create -n pre-train python=3.10
+# 激活环境
+conda activate pre-train
+```
 
-# 激活虚拟环境
+### 2. 安装必要依赖
+```bash
+# 安装基础依赖
+pip install openai backoff tqdm
+
+# 如果需要使用本地模型（可选）
+pip install torch
+pip install modelscope transformers peft datasets
+```
+
+### 3. OpenAI API配置
+程序首次运行时会提示配置API，您可以选择：
+
+1. 通过环境变量设置：
+```bash
+# Linux/Mac
+export OPENAI_API_KEY="你的API密钥"
+export OPENAI_API_BASE="你的API基础URL"  # 可选，如果使用代理
+
 # Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
+set OPENAI_API_KEY=你的API密钥
+set OPENAI_API_BASE=你的API基础URL  # 可选，如果使用代理
 ```
 
-### 依赖安装
+2. 运行程序时根据提示输入
 
+## 使用说明
+
+### 1. 准备小说文本
+- 文件第一行应包含用`<>`括起的小说标题，如：`<西游记>`
+- 章节标题行应该顶格或只有一个空格缩进
+- 正文段落应该有两个以上空格缩进
+
+### 2. 运行程序
 ```bash
-# 安装所有依赖
-pip install -r requirements.txt
+# 确保在novel_qa环境中
+conda activate novel_qa
+
+# 运行程序
+python prepare_qwen_qa.py
 ```
 
-## 快速启动
+## 输出文件
+程序会在`data`目录下生成：
+- `novel_chunks.json`: 分割后的小说章节
+- `novel_qa_data.jsonl`: 生成的问答训练数据
 
-### 数据准备
-
-准备`train.txt`
-
-### 模型预训练
-
+## 常用conda命令
 ```bash
-# 启动预训练过程
-python mini_gpt_pretrain.py
+# 查看当前环境
+conda env list
 
-# 使用自定义参数启动预训练
-python mini_gpt_pretrain.py --batch_size 32 --learning_rate 1e-4 --epochs 10
+# 退出环境
+conda deactivate
+
+# 删除环境（如需要）
+conda remove --name novel_qa --all
 ```
-
-## 超参数设置建议
-
-本项目默认超参数设置适合在资源受限的环境（如Mac M1）上进行小规模实验：
-
-```python
-VOCAB_SIZE = 1000  # 词汇表大小
-EMBED_SIZE = 64    # 嵌入维度
-NUM_HEADS = 4      # 多头注意力头数
-BLOCK_SIZE = 32    # 最大序列长度
-STRIDE = 4         # 滑动窗口步幅
-BATCH_SIZE = 8     # 批次大小
-NUM_LAYERS = 2     # Transformer 层数
-DROPOUT = 0.1      # Dropout 比例
-LEARNING_RATE = 0.001
-EPOCHS = 50
-VALIDATION_SPLIT = 0.01  # 1% 数据作为验证集
-```
-
-### 超参数调整建议
-
-- **高性能GPU环境**：可以尝试增加 `BATCH_SIZE`（32-64）、`EMBED_SIZE`（128-256）、`NUM_LAYERS`（4-6）
-- **内存受限环境**：减小 `BATCH_SIZE`（4-8）和 `BLOCK_SIZE`（16-32）
-- **提高模型性能**：增加 `EMBED_SIZE`、`NUM_HEADS` 和 `NUM_LAYERS`
-- **加快收敛速度**：调整 `LEARNING_RATE`（0.0001-0.001）
-
-
-## 参考资料
-
-- Attention Is All You Need: https://arxiv.org/abs/1706.03762
-- GPT模型原理与实现
