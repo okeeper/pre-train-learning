@@ -21,12 +21,22 @@ import argparse
 from datasets import load_dataset
 import wandb
 from datetime import datetime
+from transformers.trainer_callback import TrainerCallback
+import time
+import sys
+
+# 强制刷新所有标准输出
+os.environ["PYTHONUNBUFFERED"] = "1"
 
 # 设置日志
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(stream=sys.stdout),  # 直接输出到标准输出
+        logging.FileHandler(os.path.join(os.path.dirname(__file__), "training.log"))  # 同时保存到文件
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -235,9 +245,12 @@ class NovelChunksDataset(Dataset):
 
 def setup_wandb(args):
     """设置Weights & Biases记录"""
-    if args.use_wandb:  # 只在主进程初始化wandb
+    if args.use_wandb:
         logger.info("初始化Weights & Biases")
         run_name = args.wandb_name if args.wandb_name else f"qwen-pretrain-{args.output_dir.split('/')[-1]}"
+        
+        # 添加这行来禁用wandb的进度条
+        os.environ["WANDB_CONSOLE"] = "off"
         
         # 初始化wandb
         wandb.init(
@@ -390,6 +403,37 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print(separator)
     print("\n")
 
+class CustomLoggingCallback(TrainerCallback):
+    def __init__(self, is_main_process=True):
+        self.is_main_process = is_main_process
+        self.last_log_time = time.time()
+        self.log_interval = 10  # 每10秒记录一次进度
+    
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not self.is_main_process:
+            return
+        
+        current_time = time.time()
+        if current_time - self.last_log_time >= self.log_interval:
+            self.last_log_time = current_time
+            
+            # 构建完整的日志信息
+            log_str = []
+            for k, v in sorted(logs.items()):
+                if isinstance(v, float):
+                    log_str.append(f"{k}: {v:.4f}")
+                else:
+                    log_str.append(f"{k}: {v}")
+            
+            # 添加进度信息
+            if state.max_steps > 0:
+                progress = f"步骤: {state.global_step}/{state.max_steps} ({100*state.global_step/state.max_steps:.1f}%)"
+            else:
+                progress = f"步骤: {state.global_step}"
+            
+            # 合并并打印完整的一行
+            logger.info(f"{progress} - {', '.join(log_str)}")
+
 def main():
     args = parse_args()
     set_seed(args.seed)
@@ -477,6 +521,7 @@ def main():
         # 分布式训练参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
+        disable_tqdm=True,  # 禁用tqdm进度条
     )
     
     # 数据整理器
@@ -491,6 +536,7 @@ def main():
         args=training_args,
         data_collator=data_collator,
         train_dataset=train_dataset,
+        callbacks=[CustomLoggingCallback(is_main_process=is_main_process)]  # 添加自定义回调
     )
     
     # 监控模型(仅主进程)

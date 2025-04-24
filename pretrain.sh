@@ -8,7 +8,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --gradient_accumulation_steps 2 \
   --max_seq_length 128 \
   --num_train_epochs 0.5 \
-  --learning_rate 1e-5 \
+  --learning_rate 1e-6 \
   --use_wandb
 
 # 第二阶段：使用中等长度文本继续训练
