@@ -280,12 +280,18 @@ def setup_wandb(args):
         logger.info("初始化Weights & Biases")
         run_name = args.wandb_name if args.wandb_name else f"qwen-pretrain-{args.model_name_or_path.split('/')[-1]}"
         
+        # 设置默认项目名称（如果未指定）
+        project_name = args.wandb_project if args.wandb_project else "qwen-pretraining"
+        
         # 初始化wandb
         wandb.init(
-            project=args.wandb_project,
+            project=project_name,
             name=run_name,
             config=vars(args)
         )
+        
+        # 将项目名称回填到args中
+        args.wandb_project = project_name
         
         # 记录环境信息
         wandb.config.update({
@@ -300,15 +306,8 @@ def setup_wandb(args):
     return False
 
 def print_training_config(args, model_config, train_dataset, effective_batch_size):
-    """打印训练配置的漂亮格式"""
-    import time
+    """使用简单的制表符对齐方式打印训练配置"""
     from datetime import datetime
-    
-    # 使用Unicode字符创建更精美的框架
-    top_border = "╔" + "═" * 78 + "╗"
-    bottom_border = "╚" + "═" * 78 + "╝"
-    side_border = "║"
-    mid_border = "╠" + "═" * 78 + "╣"
     
     # 获取当前时间
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -319,103 +318,99 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     # 估算模型参数量
     params_count = ""
     if hasattr(model_config, "num_hidden_layers") and hasattr(model_config, "hidden_size"):
-        # 粗略估计参数量
         hidden_size = model_config.hidden_size
         n_layers = model_config.num_hidden_layers
         if hasattr(model_config, "vocab_size"):
-            vocab_size = model_config.vocab_size
             estimated_params = (12 * hidden_size * hidden_size * n_layers) / 1_000_000
             params_count = f"约 {estimated_params:.1f}B 参数"
     
-    # 打印精美的配置信息
+    # 使用简单的分隔线
+    separator = "-" * 80
+    
+    # 打印基本信息
     print("\n\n")
-    print(top_border)
-    print(f"{side_border}{'Qwen 预训练配置':^78}{side_border}")
-    print(mid_border)
+    print(separator)
+    print("Qwen 预训练配置")
+    print(separator)
     
     # 基本信息部分
-    print(f"{side_border} {'📅 开始时间:':<25} {now:<50} {side_border}")
-    print(f"{side_border} {'🧠 模型名称:':<25} {args.model_name_or_path:<50} {side_border}")
+    print(f"开始时间:\t{now}")
+    print(f"模型名称:\t{args.model_name_or_path}")
     if params_count:
-        print(f"{side_border} {'📊 模型规模:':<25} {params_count:<50} {side_border}")
+        print(f"模型规模:\t{params_count}")
     
     # 模型架构部分
-    print(mid_border)
-    print(f"{side_border} {'🏗️ 模型架构':^78} {side_border}")
-    print(f"{side_border}    {'- 隐藏层数:':<23} {model_config.num_hidden_layers:<48} {side_border}")
-    print(f"{side_border}    {'- 隐藏维度:':<23} {model_config.hidden_size:<48} {side_border}")
+    print("\n模型架构:")
+    print(f"\t隐藏层数:\t{model_config.num_hidden_layers}")
+    print(f"\t隐藏维度:\t{model_config.hidden_size}")
     if hasattr(model_config, "num_attention_heads"):
-        print(f"{side_border}    {'- 注意力头数:':<23} {model_config.num_attention_heads:<48} {side_border}")
+        print(f"\t注意力头数:\t{model_config.num_attention_heads}")
     if hasattr(model_config, "vocab_size"):
-        print(f"{side_border}    {'- 词表大小:':<23} {model_config.vocab_size:<48} {side_border}")
+        print(f"\t词表大小:\t{model_config.vocab_size}")
     
     # 训练数据部分
-    print(mid_border)
-    print(f"{side_border} {'📚 训练数据':^78} {side_border}")
-    print(f"{side_border}    {'- 数据目录:':<23} {args.data_dir:<48} {side_border}")
-    print(f"{side_border}    {'- 文件模式:':<23} {args.file_pattern:<48} {side_border}")
-    print(f"{side_border}    {'- 数据样本数:':<23} {len(train_dataset):,} 个样本{' '*(48-len(str(len(train_dataset)))-5)} {side_border}")
-    print(f"{side_border}    {'- 最大序列长度:':<23} {args.max_seq_length}{' '*(48-len(str(args.max_seq_length)))} {side_border}")
+    print("\n训练数据:")
+    print(f"\t数据目录:\t{args.data_dir}")
+    print(f"\t文件模式:\t{args.file_pattern}")
+    print(f"\t数据样本数:\t{len(train_dataset):,} 个样本")
+    print(f"\t最大序列长度:\t{args.max_seq_length}")
     
     # 训练设置部分
-    print(mid_border)
-    print(f"{side_border} {'⚙️ 训练设置':^78} {side_border}")
-    print(f"{side_border}    {'- GPU数量:':<23} {gpu_count} {'GPU':<47} {side_border}")
-    print(f"{side_border}    {'- 每设备批次大小:':<23} {args.per_device_train_batch_size}{' '*(48-len(str(args.per_device_train_batch_size)))} {side_border}")
-    print(f"{side_border}    {'- 梯度累积步数:':<23} {args.gradient_accumulation_steps}{' '*(48-len(str(args.gradient_accumulation_steps)))} {side_border}")
-    print(f"{side_border}    {'- 有效总批次大小:':<23} {effective_batch_size}{' '*(48-len(str(effective_batch_size)))} {side_border}")
+    print("\n训练设置:")
+    print(f"\tGPU数量:\t{gpu_count} GPU")
+    print(f"\t每设备批次大小:\t{args.per_device_train_batch_size}")
+    print(f"\t梯度累积步数:\t{args.gradient_accumulation_steps}")
+    print(f"\t有效总批次大小:\t{effective_batch_size}")
     
     if args.max_steps > 0:
-        print(f"{side_border}    {'- 训练步数:':<23} {args.max_steps:,}{' '*(48-len(str(args.max_steps))-2)} {side_border}")
+        print(f"\t训练步数:\t{args.max_steps:,}")
         total_samples = args.max_steps * effective_batch_size
         epochs_equiv = args.max_steps * effective_batch_size / len(train_dataset)
-        print(f"{side_border}    {'- 预计训练样本数:':<23} {total_samples:,} (约 {epochs_equiv:.2f} 轮){' '*(48-len(str(total_samples))-len(f'(约 {epochs_equiv:.2f} 轮)')-2)} {side_border}")
+        print(f"\t预计训练样本数:\t{total_samples:,} (约 {epochs_equiv:.2f} 轮)")
     else:
-        print(f"{side_border}    {'- 训练轮次:':<23} {args.num_train_epochs:.1f} 轮{' '*(48-len(str(args.num_train_epochs))-3)} {side_border}")
+        print(f"\t训练轮次:\t{args.num_train_epochs:.1f} 轮")
         estimated_steps = int(len(train_dataset) * args.num_train_epochs / effective_batch_size)
-        print(f"{side_border}    {'- 预计总步数:':<23} {estimated_steps:,}{' '*(48-len(str(estimated_steps))-2)} {side_border}")
+        print(f"\t预计总步数:\t{estimated_steps:,}")
     
     # 优化器设置部分
-    print(mid_border)
-    print(f"{side_border} {'🔧 优化器设置':^78} {side_border}")
-    print(f"{side_border}    {'- 学习率:':<23} {args.learning_rate:.1e}{' '*(48-len(f'{args.learning_rate:.1e}'))} {side_border}")
-    print(f"{side_border}    {'- 权重衰减:':<23} {args.weight_decay}{' '*(48-len(str(args.weight_decay)))} {side_border}")
+    print("\n优化器设置:")
+    print(f"\t学习率:\t{args.learning_rate:.1e}")
+    print(f"\t权重衰减:\t{args.weight_decay}")
     
     # 加速技术部分
-    print(mid_border)
-    print(f"{side_border} {'🚀 加速技术':^78} {side_border}")
-    print(f"{side_border}    {'- FP16混合精度:':<23} {'✅ 启用' if args.fp16 else '❌ 禁用':<48} {side_border}")
-    print(f"{side_border}    {'- 梯度检查点:':<23} {'✅ 启用' if args.gradient_checkpointing else '❌ 禁用':<48} {side_border}")
-    print(f"{side_border}    {'- DeepSpeed:':<23} {'✅ 启用' if args.deepspeed else '❌ 禁用':<48} {side_border}")
+    print("\n加速技术:")
+    print(f"\tFP16混合精度:\t{'启用' if args.fp16 else '禁用'}")
+    print(f"\t梯度检查点:\t{'启用' if args.gradient_checkpointing else '禁用'}")
+    print(f"\tDeepSpeed:\t{'启用' if args.deepspeed else '禁用'}")
     
     # 保存与监控部分
-    print(mid_border)
-    print(f"{side_border} {'📊 保存与监控':^78} {side_border}")
-    print(f"{side_border}    {'- 输出目录:':<23} {args.output_dir:<48} {side_border}")
-    print(f"{side_border}    {'- 日志步数:':<23} {args.logging_steps}{' '*(48-len(str(args.logging_steps)))} {side_border}")
-    print(f"{side_border}    {'- 保存步数:':<23} {args.save_steps}{' '*(48-len(str(args.save_steps)))} {side_border}")
-    print(f"{side_border}    {'- Weights & Biases:':<23} {'✅ 启用' if args.use_wandb else '❌ 禁用':<48} {side_border}")
+    print("\n保存与监控:")
+    print(f"\t输出目录:\t{args.output_dir}")
+    print(f"\t日志步数:\t{args.logging_steps}")
+    print(f"\t保存步数:\t{args.save_steps}")
+    print(f"\tWeights & Biases:\t{'启用' if args.use_wandb else '禁用'}")
     if args.use_wandb and wandb.run:
-        print(f"{side_border}    {'- WandB项目:':<23} {args.wandb_project:<48} {side_border}")
-        print(f"{side_border}    {'- WandB运行:':<23} {wandb.run.name:<48} {side_border}")
+        # 添加检查，确保 wandb_project 不为 None
+        if args.wandb_project:
+            print(f"\tWandB项目:\t{args.wandb_project}")
+        else:
+            print(f"\tWandB项目:\t{'未指定'}")
+        print(f"\tWandB运行:\t{wandb.run.name}")
     
     # 其他信息部分
-    print(mid_border)
-    print(f"{side_border} {'🔄 其他信息':^78} {side_border}")
-    print(f"{side_border}    {'- 随机种子:':<23} {args.seed}{' '*(48-len(str(args.seed)))} {side_border}")
+    print("\n其他信息:")
+    print(f"\t随机种子:\t{args.seed}")
     
     # 预计的训练时间
-    # 这里我们可以进行粗略估计
     tokens_per_step = effective_batch_size * args.max_seq_length
     if args.max_steps > 0:
         total_steps = args.max_steps
     else:
         total_steps = int(len(train_dataset) * args.num_train_epochs / effective_batch_size)
     
-    # 计算粗略的训练时间估计（假设每步训练时间）
+    # 计算粗略的训练时间估计
     tokens_per_second = 1000  # 粗略估计，实际取决于硬件
     if gpu_count > 0 and hasattr(model_config, 'hidden_size'):
-        # 根据模型大小和GPU数量粗略估计
         size_factor = model_config.hidden_size / 1024
         tokens_per_second = tokens_per_second / size_factor * gpu_count
         
@@ -431,17 +426,20 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
         time_str += f"{days}天 "
     time_str += f"{hours}小时 {minutes}分钟"
     
-    print(f"{side_border}    {'- 预计训练时长:':<23} {time_str:<48} {side_border}")
+    print(f"\t预计训练时长:\t{time_str}")
     
-    # 底部边框和提示
-    print(mid_border)
-    print(f"{side_border} {'⏳ 训练已开始...':^78} {side_border}")
-    print(bottom_border)
+    # 结束部分
+    print(separator)
+    print("训练已开始...")
+    print(separator)
     print("\n")
 
 def main():
     args = parse_args()
     set_seed(args.seed)
+    
+    # 检查依赖关系
+    tensorboard_missing = check_dependencies()
     
     # 配置多GPU训练
     args = setup_parallel_training(args)
