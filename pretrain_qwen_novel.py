@@ -52,10 +52,10 @@ def parse_args():
         help="保存模型和日志的输出目录",
     )
     parser.add_argument(
-        "--train_batch_size",
+        "--per_device_train_batch_size",
         type=int,
         default=1,
-        help="训练批次大小",
+        help="每个GPU的训练批次大小",
     )
     parser.add_argument(
         "--gradient_accumulation_steps",
@@ -102,7 +102,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=1024,  # 修改默认值为更合理的1024
+        default=1024,
         help="最大序列长度",
     )
     parser.add_argument(
@@ -184,10 +184,14 @@ class NovelChunksDataset(Dataset):
                         for item in data:
                             if isinstance(item, dict) and "content" in item:
                                 self.examples.append(item["content"])
+                            elif isinstance(item, dict) and "text" in item:
+                                self.examples.append(item["text"])
                             elif isinstance(item, str):
                                 self.examples.append(item)
                     elif isinstance(data, dict) and "content" in data:
                         self.examples.append(data["content"])
+                    elif isinstance(data, dict) and "text" in data:
+                        self.examples.append(data["text"])
                     else:
                         logger.warning(f"文件{json_file}格式不符合预期: {type(data)}")
             except Exception as e:
@@ -224,7 +228,7 @@ class NovelChunksDataset(Dataset):
 
 def setup_wandb(args):
     """设置Weights & Biases记录"""
-    if args.use_wandb:
+    if args.use_wandb:  # 只在主进程初始化wandb
         logger.info("初始化Weights & Biases")
         run_name = args.wandb_name if args.wandb_name else f"qwen-pretrain-{args.model_name_or_path.split('/')[-1]}"
         
@@ -236,8 +240,9 @@ def setup_wandb(args):
         )
         
         # 记录环境信息
+        gpu_count = torch.cuda.device_count()
         wandb.config.update({
-            "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+            "gpu_count": gpu_count,
             "gpu_type": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None",
             "pytorch_version": torch.__version__,
             "transformers_version": transformers.__version__,
@@ -253,6 +258,9 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     
     # 获取当前时间
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # 检测GPU数量
+    gpu_count = torch.cuda.device_count()
     
     # 估算模型参数量
     params_count = ""
@@ -300,8 +308,8 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     
     # 训练设置部分
     print("\n训练设置:")
-    print(f"\t设备:\t{'CUDA' if torch.cuda.is_available() else 'CPU'}")
-    print(f"\t批次大小:\t{args.train_batch_size}")
+    print(f"\tGPU数量:\t{gpu_count} 个")
+    print(f"\t每设备批次大小:\t{args.per_device_train_batch_size}")
     print(f"\t梯度累积步数:\t{args.gradient_accumulation_steps}")
     print(f"\t有效总批次大小:\t{effective_batch_size}")
     
@@ -353,7 +361,7 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     tokens_per_second = 500  # 单GPU粗略估计，实际取决于硬件
     if torch.cuda.is_available() and hasattr(model_config, 'hidden_size'):
         size_factor = model_config.hidden_size / 1024
-        tokens_per_second = tokens_per_second / size_factor
+        tokens_per_second = tokens_per_second / size_factor * gpu_count
         
     estimated_seconds = (tokens_per_step * total_steps) / tokens_per_second
     estimated_hours = estimated_seconds / 3600
@@ -408,10 +416,10 @@ def main():
     tokenizer.padding_side = "right"
     
     # 加载模型
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"使用设备: {device}")
+    gpu_count = torch.cuda.device_count()
+    logger.info(f"检测到 {gpu_count} 个GPU设备")
     
-    # 使用auto模式，torch会自动选择适合的数据类型
+    # 加载模型时设置适当的数据类型
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path, 
         config=model_config,
@@ -430,8 +438,8 @@ def main():
         file_pattern=args.file_pattern
     )
     
-    # 计算有效批次大小
-    effective_batch_size = args.train_batch_size * args.gradient_accumulation_steps
+    # 计算有效批次大小 - 考虑数据并行情况（即使是非分布式环境）
+    effective_batch_size = args.per_device_train_batch_size * gpu_count * args.gradient_accumulation_steps
     
     # 打印训练配置
     print_training_config(args, model_config, train_dataset, effective_batch_size)
@@ -457,11 +465,11 @@ def main():
         max_steps = args.max_steps
         num_train_epochs = None
     
-    # 配置训练参数
+    # 配置训练参数 - 非分布式环境
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True if last_checkpoint is None else False,
-        per_device_train_batch_size=args.train_batch_size,
+        per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
@@ -473,9 +481,11 @@ def main():
         save_total_limit=3,  # 仅保存最后3个检查点
         remove_unused_columns=False,
         logging_dir=os.path.join(args.output_dir, "logs"),
-        dataloader_num_workers=2,  # 降低为单线程优化
+        dataloader_num_workers=4,
         report_to=["wandb"] if args.use_wandb else [],
         run_name=f"qwen-pretrain-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        # 启用自动设备映射（让HuggingFace自动处理多GPU情况）
+        no_cuda=not torch.cuda.is_available(),
     )
     
     # 初始化Trainer
