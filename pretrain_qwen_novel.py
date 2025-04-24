@@ -304,9 +304,11 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     import time
     from datetime import datetime
     
-    # 创建分隔线和标题
-    separator = "=" * 80
-    title = "Qwen 预训练配置"
+    # 使用Unicode字符创建更精美的框架
+    top_border = "╔" + "═" * 78 + "╗"
+    bottom_border = "╚" + "═" * 78 + "╝"
+    side_border = "║"
+    mid_border = "╠" + "═" * 78 + "╣"
     
     # 获取当前时间
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -314,59 +316,128 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     # 计算有效批次大小
     gpu_count = torch.cuda.device_count()
     
-    # 格式化打印
-    print(f"\n{separator}")
-    print(f"{title:^80}")
-    print(f"{separator}")
-    print(f"{'开始时间:':<30} {now}")
-    print(f"{'模型信息:':<30}")
-    print(f"  {'- 模型名称:':<28} {args.model_name_or_path}")
-    print(f"  {'- 模型参数量:':<28} {model_config.num_hidden_layers}层 x {model_config.hidden_size}维度")
+    # 估算模型参数量
+    params_count = ""
+    if hasattr(model_config, "num_hidden_layers") and hasattr(model_config, "hidden_size"):
+        # 粗略估计参数量
+        hidden_size = model_config.hidden_size
+        n_layers = model_config.num_hidden_layers
+        if hasattr(model_config, "vocab_size"):
+            vocab_size = model_config.vocab_size
+            estimated_params = (12 * hidden_size * hidden_size * n_layers) / 1_000_000
+            params_count = f"约 {estimated_params:.1f}B 参数"
+    
+    # 打印精美的配置信息
+    print("\n\n")
+    print(top_border)
+    print(f"{side_border}{'Qwen 预训练配置':^78}{side_border}")
+    print(mid_border)
+    
+    # 基本信息部分
+    print(f"{side_border} {'📅 开始时间:':<25} {now:<50} {side_border}")
+    print(f"{side_border} {'🧠 模型名称:':<25} {args.model_name_or_path:<50} {side_border}")
+    if params_count:
+        print(f"{side_border} {'📊 模型规模:':<25} {params_count:<50} {side_border}")
+    
+    # 模型架构部分
+    print(mid_border)
+    print(f"{side_border} {'🏗️ 模型架构':^78} {side_border}")
+    print(f"{side_border}    {'- 隐藏层数:':<23} {model_config.num_hidden_layers:<48} {side_border}")
+    print(f"{side_border}    {'- 隐藏维度:':<23} {model_config.hidden_size:<48} {side_border}")
     if hasattr(model_config, "num_attention_heads"):
-        print(f"  {'- 注意力头数:':<28} {model_config.num_attention_heads}")
+        print(f"{side_border}    {'- 注意力头数:':<23} {model_config.num_attention_heads:<48} {side_border}")
     if hasattr(model_config, "vocab_size"):
-        print(f"  {'- 词表大小:':<28} {model_config.vocab_size}")
-    print(f"{'训练数据:':<30}")
-    print(f"  {'- 数据目录:':<28} {args.data_dir}")
-    print(f"  {'- 文件模式:':<28} {args.file_pattern}")
-    print(f"  {'- 数据样本数:':<28} {len(train_dataset):,}")
-    print(f"  {'- 最大序列长度:':<28} {args.max_seq_length}")
-    print(f"{'训练设置:':<30}")
-    print(f"  {'- GPU数量:':<28} {gpu_count}")
-    print(f"  {'- 每设备批次大小:':<28} {args.per_device_train_batch_size}")
-    print(f"  {'- 梯度累积步数:':<28} {args.gradient_accumulation_steps}")
-    print(f"  {'- 有效总批次大小:':<28} {effective_batch_size}")
+        print(f"{side_border}    {'- 词表大小:':<23} {model_config.vocab_size:<48} {side_border}")
+    
+    # 训练数据部分
+    print(mid_border)
+    print(f"{side_border} {'📚 训练数据':^78} {side_border}")
+    print(f"{side_border}    {'- 数据目录:':<23} {args.data_dir:<48} {side_border}")
+    print(f"{side_border}    {'- 文件模式:':<23} {args.file_pattern:<48} {side_border}")
+    print(f"{side_border}    {'- 数据样本数:':<23} {len(train_dataset):,} 个样本{' '*(48-len(str(len(train_dataset)))-5)} {side_border}")
+    print(f"{side_border}    {'- 最大序列长度:':<23} {args.max_seq_length}{' '*(48-len(str(args.max_seq_length)))} {side_border}")
+    
+    # 训练设置部分
+    print(mid_border)
+    print(f"{side_border} {'⚙️ 训练设置':^78} {side_border}")
+    print(f"{side_border}    {'- GPU数量:':<23} {gpu_count} {'GPU':<47} {side_border}")
+    print(f"{side_border}    {'- 每设备批次大小:':<23} {args.per_device_train_batch_size}{' '*(48-len(str(args.per_device_train_batch_size)))} {side_border}")
+    print(f"{side_border}    {'- 梯度累积步数:':<23} {args.gradient_accumulation_steps}{' '*(48-len(str(args.gradient_accumulation_steps)))} {side_border}")
+    print(f"{side_border}    {'- 有效总批次大小:':<23} {effective_batch_size}{' '*(48-len(str(effective_batch_size)))} {side_border}")
     
     if args.max_steps > 0:
-        print(f"  {'- 训练步数:':<28} {args.max_steps:,}")
-        print(f"  {'- 预计总样本数:':<28} {args.max_steps * effective_batch_size:,} (约{args.max_steps * effective_batch_size / len(train_dataset):.2f}轮)")
+        print(f"{side_border}    {'- 训练步数:':<23} {args.max_steps:,}{' '*(48-len(str(args.max_steps))-2)} {side_border}")
+        total_samples = args.max_steps * effective_batch_size
+        epochs_equiv = args.max_steps * effective_batch_size / len(train_dataset)
+        print(f"{side_border}    {'- 预计训练样本数:':<23} {total_samples:,} (约 {epochs_equiv:.2f} 轮){' '*(48-len(str(total_samples))-len(f'(约 {epochs_equiv:.2f} 轮)')-2)} {side_border}")
     else:
-        print(f"  {'- 训练轮次:':<28} {args.num_train_epochs}")
+        print(f"{side_border}    {'- 训练轮次:':<23} {args.num_train_epochs:.1f} 轮{' '*(48-len(str(args.num_train_epochs))-3)} {side_border}")
         estimated_steps = int(len(train_dataset) * args.num_train_epochs / effective_batch_size)
-        print(f"  {'- 预计总步数:':<28} {estimated_steps:,}")
+        print(f"{side_border}    {'- 预计总步数:':<23} {estimated_steps:,}{' '*(48-len(str(estimated_steps))-2)} {side_border}")
     
-    print(f"{'优化器设置:':<30}")
-    print(f"  {'- 学习率:':<28} {args.learning_rate}")
-    print(f"  {'- 权重衰减:':<28} {args.weight_decay}")
-    print(f"  {'- FP16混合精度:':<28} {'启用' if args.fp16 else '禁用'}")
-    print(f"  {'- 梯度检查点:':<28} {'启用' if args.gradient_checkpointing else '禁用'}")
-    print(f"  {'- DeepSpeed:':<28} {'启用' if args.deepspeed else '禁用'}")
+    # 优化器设置部分
+    print(mid_border)
+    print(f"{side_border} {'🔧 优化器设置':^78} {side_border}")
+    print(f"{side_border}    {'- 学习率:':<23} {args.learning_rate:.1e}{' '*(48-len(f'{args.learning_rate:.1e}'))} {side_border}")
+    print(f"{side_border}    {'- 权重衰减:':<23} {args.weight_decay}{' '*(48-len(str(args.weight_decay)))} {side_border}")
     
-    print(f"{'保存与日志:':<30}")
-    print(f"  {'- 输出目录:':<28} {args.output_dir}")
-    print(f"  {'- 日志步数:':<28} {args.logging_steps}")
-    print(f"  {'- 保存步数:':<28} {args.save_steps}")
-    print(f"  {'- WandB跟踪:':<28} {'启用' if args.use_wandb else '禁用'}")
-    if args.use_wandb:
-        print(f"  {'- WandB项目:':<28} {args.wandb_project}")
-        print(f"  {'- WandB运行名称:':<28} {wandb.run.name if wandb.run else args.wandb_name}")
+    # 加速技术部分
+    print(mid_border)
+    print(f"{side_border} {'🚀 加速技术':^78} {side_border}")
+    print(f"{side_border}    {'- FP16混合精度:':<23} {'✅ 启用' if args.fp16 else '❌ 禁用':<48} {side_border}")
+    print(f"{side_border}    {'- 梯度检查点:':<23} {'✅ 启用' if args.gradient_checkpointing else '❌ 禁用':<48} {side_border}")
+    print(f"{side_border}    {'- DeepSpeed:':<23} {'✅ 启用' if args.deepspeed else '❌ 禁用':<48} {side_border}")
     
-    print(f"{'其他信息:':<30}")
-    print(f"  {'- 随机种子:':<28} {args.seed}")
-    print(f"  {'- 预计训练时长:':<28} {'计算中...'}")
-    print(f"{separator}")
-    print(f"{'训练已开始...'}")
-    print(f"{separator}\n")
+    # 保存与监控部分
+    print(mid_border)
+    print(f"{side_border} {'📊 保存与监控':^78} {side_border}")
+    print(f"{side_border}    {'- 输出目录:':<23} {args.output_dir:<48} {side_border}")
+    print(f"{side_border}    {'- 日志步数:':<23} {args.logging_steps}{' '*(48-len(str(args.logging_steps)))} {side_border}")
+    print(f"{side_border}    {'- 保存步数:':<23} {args.save_steps}{' '*(48-len(str(args.save_steps)))} {side_border}")
+    print(f"{side_border}    {'- Weights & Biases:':<23} {'✅ 启用' if args.use_wandb else '❌ 禁用':<48} {side_border}")
+    if args.use_wandb and wandb.run:
+        print(f"{side_border}    {'- WandB项目:':<23} {args.wandb_project:<48} {side_border}")
+        print(f"{side_border}    {'- WandB运行:':<23} {wandb.run.name:<48} {side_border}")
+    
+    # 其他信息部分
+    print(mid_border)
+    print(f"{side_border} {'🔄 其他信息':^78} {side_border}")
+    print(f"{side_border}    {'- 随机种子:':<23} {args.seed}{' '*(48-len(str(args.seed)))} {side_border}")
+    
+    # 预计的训练时间
+    # 这里我们可以进行粗略估计
+    tokens_per_step = effective_batch_size * args.max_seq_length
+    if args.max_steps > 0:
+        total_steps = args.max_steps
+    else:
+        total_steps = int(len(train_dataset) * args.num_train_epochs / effective_batch_size)
+    
+    # 计算粗略的训练时间估计（假设每步训练时间）
+    tokens_per_second = 1000  # 粗略估计，实际取决于硬件
+    if gpu_count > 0 and hasattr(model_config, 'hidden_size'):
+        # 根据模型大小和GPU数量粗略估计
+        size_factor = model_config.hidden_size / 1024
+        tokens_per_second = tokens_per_second / size_factor * gpu_count
+        
+    estimated_seconds = (tokens_per_step * total_steps) / tokens_per_second
+    estimated_hours = estimated_seconds / 3600
+    
+    days = int(estimated_hours // 24)
+    hours = int(estimated_hours % 24)
+    minutes = int((estimated_hours * 60) % 60)
+    
+    time_str = ""
+    if days > 0:
+        time_str += f"{days}天 "
+    time_str += f"{hours}小时 {minutes}分钟"
+    
+    print(f"{side_border}    {'- 预计训练时长:':<23} {time_str:<48} {side_border}")
+    
+    # 底部边框和提示
+    print(mid_border)
+    print(f"{side_border} {'⏳ 训练已开始...':^78} {side_border}")
+    print(bottom_border)
+    print("\n")
 
 def main():
     args = parse_args()
@@ -451,6 +522,13 @@ def main():
         max_steps = args.max_steps
         num_train_epochs = None
     
+    # 根据依赖检查结果调整report_to设置
+    report_options = []
+    if args.use_wandb:
+        report_options.append("wandb")
+    if not tensorboard_missing:
+        report_options.append("tensorboard")
+    
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True if last_checkpoint is None else False,
@@ -468,7 +546,7 @@ def main():
         remove_unused_columns=False,
         logging_dir=os.path.join(args.output_dir, "logs"),
         dataloader_num_workers=4,
-        report_to=["tensorboard", "wandb"] if args.use_wandb else ["tensorboard"],
+        report_to=["wandb"] if args.use_wandb else [],
         # 确保其他参数也有默认值
         local_rank=getattr(args, "local_rank", -1),
         ddp_find_unused_parameters=False,
