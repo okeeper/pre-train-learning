@@ -391,43 +391,46 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print("\n")
 
 def main():
-
     args = parse_args()
     set_seed(args.seed)
     
-    # 创建输出目录
-    os.makedirs(args.output_dir, exist_ok=True)
+    # 检查是否在分布式环境中
+    is_distributed = args.local_rank != -1
+    if is_distributed:
+        # 仅初始化一次分布式环境
+        if not torch.distributed.is_initialized():
+            torch.distributed.init_process_group(backend="nccl")
+        torch.cuda.set_device(args.local_rank)
+        logger.info(f"使用分布式训练，rank={args.local_rank}")
     
-    # 初始化wandb
-    using_wandb = setup_wandb(args)
+    # 定义主进程变量，用于替代重复的条件判断
+    is_main_process = not is_distributed or args.local_rank == 0
     
-    # 检查是否有上一次训练的检查点
+    # 创建输出目录(只在主进程)
+    if is_main_process:
+        os.makedirs(args.output_dir, exist_ok=True)
+    
+    # 初始化wandb(只在主进程)
+    if is_main_process:
+        using_wandb = setup_wandb(args)
+    
+    # 检查检查点(所有进程都需要)
     last_checkpoint = None
     if os.path.isdir(args.output_dir):
         last_checkpoint = get_last_checkpoint(args.output_dir)
-        if last_checkpoint is not None:
-            logger.info(f"找到检查点: {last_checkpoint}，将从此处恢复训练")
+        if last_checkpoint is not None and is_main_process:
+            logger.info(f"找到检查点: {last_checkpoint}")
     
-    # 加载模型和分词器
-    logger.info(f"加载模型: {args.model_name_or_path}")
-    
+    # 加载模型配置和分词器
     model_config = AutoConfig.from_pretrained(args.model_name_or_path)
-    
-    # 启用梯度检查点以节省GPU内存
     if args.gradient_checkpointing:
         model_config.use_cache = False
-        logger.info("启用梯度检查点以节省GPU内存")
     
-    # 加载分词器
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
     
     # 加载模型
-    gpu_count = torch.cuda.device_count()
-    logger.info(f"检测到 {gpu_count} 个GPU设备")
-    
-    # 加载模型时不指定数据类型
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path, 
         config=model_config
@@ -436,8 +439,7 @@ def main():
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
     
-    # 加载训练数据
-    logger.info(f"加载训练数据，使用文件模式: {args.file_pattern}")
+    # 加载数据集(所有进程需要自己的副本)
     train_dataset = NovelChunksDataset(
         data_dir=args.data_dir,
         tokenizer=tokenizer,
@@ -445,34 +447,16 @@ def main():
         file_pattern=args.file_pattern
     )
     
-    # 计算有效批次大小 - 考虑数据并行情况（即使是非分布式环境）
-    effective_batch_size = args.per_device_train_batch_size * gpu_count * args.gradient_accumulation_steps
+    # 计算有效批次大小
+    gpu_count = torch.cuda.device_count()
+    world_size = torch.distributed.get_world_size() if is_distributed else 1
+    effective_batch_size = args.per_device_train_batch_size * world_size * args.gradient_accumulation_steps
     
-    # 打印训练配置
-    print_training_config(args, model_config, train_dataset, effective_batch_size)
+    # 仅在主进程打印训练配置
+    if is_main_process:
+        print_training_config(args, model_config, train_dataset, effective_batch_size)
     
-    # 创建数据整理器
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,  # 使用自回归语言建模而非掩码语言建模
-    )
-    
-    # 确保max_steps和num_train_epochs至少有一个有效值
-    if args.max_steps is None or args.max_steps <= 0:
-        if args.num_train_epochs is None or args.num_train_epochs <= 0:
-            logger.info("既没有设置有效的max_steps也没有设置有效的num_train_epochs，设置默认值max_steps=1000")
-            max_steps = 1000
-            num_train_epochs = None
-        else:
-            logger.info(f"使用num_train_epochs={args.num_train_epochs}训练")
-            max_steps = -1
-            num_train_epochs = args.num_train_epochs
-    else:
-        logger.info(f"使用max_steps={args.max_steps}训练")
-        max_steps = args.max_steps
-        num_train_epochs = None
-    
-    # 配置训练参数 - 非分布式环境
+    # 配置训练参数
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True if last_checkpoint is None else False,
@@ -480,19 +464,25 @@ def main():
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        max_steps=max_steps,
-        num_train_epochs=num_train_epochs,
+        max_steps=-1 if args.num_train_epochs > 0 else args.max_steps,
+        num_train_epochs=args.num_train_epochs if args.num_train_epochs > 0 else None,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
-        fp16=False,  # 将fp16设置为False，禁用混合精度训练
-        save_total_limit=3,  # 仅保存最后3个检查点
+        fp16=False,  # 禁用混合精度
+        save_total_limit=3,
         remove_unused_columns=False,
-        logging_dir=os.path.join(args.output_dir, "logs"),
         dataloader_num_workers=4,
-        report_to=["wandb"] if args.use_wandb else [],
+        report_to=["wandb"] if args.use_wandb and is_main_process else [],
         run_name=f"qwen-pretrain-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-        # 启用自动设备映射（让HuggingFace自动处理多GPU情况）
-        no_cuda=not torch.cuda.is_available(),
+        # 分布式训练参数
+        local_rank=args.local_rank,
+        ddp_find_unused_parameters=False,
+    )
+    
+    # 数据整理器
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,
     )
     
     # 初始化Trainer
@@ -503,30 +493,26 @@ def main():
         train_dataset=train_dataset,
     )
     
-    # 如果启用wandb并设置了watch，监控模型
-    if args.use_wandb and args.wandb_watch != "False":
-        wandb.watch(
-            model,
-            log=args.wandb_watch,
-            log_freq=args.logging_steps
-        )
+    # 监控模型(仅主进程)
+    if args.use_wandb and args.wandb_watch != "False" and is_main_process:
+        wandb.watch(model, log=args.wandb_watch, log_freq=args.logging_steps)
     
     # 开始训练
     logger.info("开始训练")
     trainer.train(resume_from_checkpoint=last_checkpoint)
     
-    # 保存最终模型
-    logger.info("保存最终模型")
-    trainer.save_model(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
-    
-    # 如果使用wandb，记录模型和完成运行
-    if args.use_wandb:
-        logger.info("将模型上传到Weights & Biases")
-        artifact = wandb.Artifact(name=f"model-{wandb.run.id}", type="model")
-        artifact.add_dir(args.output_dir)
-        wandb.log_artifact(artifact)
-        wandb.finish()
+    # 保存模型(仅主进程)
+    if is_main_process:
+        logger.info("保存最终模型")
+        trainer.save_model(args.output_dir)
+        tokenizer.save_pretrained(args.output_dir)
+        
+        # wandb记录(仅主进程)
+        if args.use_wandb:
+            artifact = wandb.Artifact(name=f"model-{wandb.run.id}", type="model")
+            artifact.add_dir(args.output_dir)
+            wandb.log_artifact(artifact)
+            wandb.finish()
     
     logger.info("预训练完成!")
 
