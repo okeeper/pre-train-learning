@@ -427,11 +427,10 @@ def main():
     gpu_count = torch.cuda.device_count()
     logger.info(f"检测到 {gpu_count} 个GPU设备")
     
-    # 加载模型时设置适当的数据类型
+    # 加载模型时不指定数据类型
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path, 
-        config=model_config,
-        torch_dtype=torch.float16 if args.fp16 and torch.cuda.is_available() else None
+        config=model_config
     )
     
     if args.gradient_checkpointing:
@@ -485,7 +484,7 @@ def main():
         num_train_epochs=num_train_epochs,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
-        fp16=args.fp16 and torch.cuda.is_available(),
+        fp16=False,  # 将fp16设置为False，禁用混合精度训练
         save_total_limit=3,  # 仅保存最后3个检查点
         remove_unused_columns=False,
         logging_dir=os.path.join(args.output_dir, "logs"),
