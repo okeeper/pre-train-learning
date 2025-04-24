@@ -151,6 +151,13 @@ def parse_args():
         choices=["all", "gradients", "parameters", "False"],
         help="wandb的watch级别 (default: gradients)",
     )
+    parser.add_argument(
+        "--local-rank",
+        type=int,
+        dest="local_rank",  # 指向同一个目标变量
+        default=-1,
+        help=argparse.SUPPRESS,  # 在帮助信息中隐藏这个重复参数
+    )
     args = parser.parse_args()
     return args
 
@@ -384,6 +391,7 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print("\n")
 
 def main():
+
     args = parse_args()
     set_seed(args.seed)
     
