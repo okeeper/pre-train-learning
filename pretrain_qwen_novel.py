@@ -194,12 +194,12 @@ class NovelChunksDataset(Dataset):
                     data = json.load(f)
                     if isinstance(data, list):
                         for item in data:
-                            if isinstance(item, dict) and "text" in item:
-                                self.examples.append(item["text"])
+                            if isinstance(item, dict) and "content" in item:
+                                self.examples.append(item["content"])
                             elif isinstance(item, str):
                                 self.examples.append(item)
-                    elif isinstance(data, dict) and "text" in data:
-                        self.examples.append(data["text"])
+                    elif isinstance(data, dict) and "content" in data:
+                        self.examples.append(data["content"])
                     else:
                         logger.warning(f"文件{json_file}格式不符合预期: {type(data)}")
             except Exception as e:
