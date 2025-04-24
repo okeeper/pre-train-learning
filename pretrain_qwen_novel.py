@@ -404,8 +404,9 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print("\n")
 
 class SimpleLoggingCallback(TrainerCallback):
-    def __init__(self, is_main_process=True):
+    def __init__(self, is_main_process=True, use_wandb=False):
         self.is_main_process = is_main_process
+        self.use_wandb = use_wandb
     
     def on_log(self, args, state, control, logs=None, **kwargs):
         # 只在主进程上报
@@ -430,7 +431,7 @@ class SimpleLoggingCallback(TrainerCallback):
         logger.info(f"{progress} - {', '.join(log_str)}")
         
         # 简单上报到wandb
-        if args.use_wandb and wandb.run is not None:
+        if self.use_wandb and wandb.run is not None:
             # 只记录数值型指标
             wandb_logs = {k: v for k, v in logs.items() if isinstance(v, (int, float))}
             # 记录到wandb
@@ -538,7 +539,7 @@ def main():
         args=training_args,
         data_collator=data_collator,
         train_dataset=train_dataset,
-        callbacks=[SimpleLoggingCallback(is_main_process=is_main_process)]  # 添加自定义回调
+        callbacks=[SimpleLoggingCallback(is_main_process=is_main_process, use_wandb=args.use_wandb)]  # 添加自定义回调
     )
     
     # 监控模型(仅主进程)
