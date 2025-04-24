@@ -83,7 +83,7 @@ def parse_args():
     parser.add_argument(
         "--max_steps",
         type=int,
-        default=-1,  # 修改默认值为-1，表示不使用max_steps
+        default=-1,  # 默认值为-1，表示使用num_train_epochs
         help="训练的最大步数，设为-1时使用num_train_epochs参数",
     )
     parser.add_argument(
@@ -299,6 +299,75 @@ def setup_wandb(args):
         return True
     return False
 
+def print_training_config(args, model_config, train_dataset, effective_batch_size):
+    """打印训练配置的漂亮格式"""
+    import time
+    from datetime import datetime
+    
+    # 创建分隔线和标题
+    separator = "=" * 80
+    title = "Qwen 预训练配置"
+    
+    # 获取当前时间
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # 计算有效批次大小
+    gpu_count = torch.cuda.device_count()
+    
+    # 格式化打印
+    print(f"\n{separator}")
+    print(f"{title:^80}")
+    print(f"{separator}")
+    print(f"{'开始时间:':<30} {now}")
+    print(f"{'模型信息:':<30}")
+    print(f"  {'- 模型名称:':<28} {args.model_name_or_path}")
+    print(f"  {'- 模型参数量:':<28} {model_config.num_hidden_layers}层 x {model_config.hidden_size}维度")
+    if hasattr(model_config, "num_attention_heads"):
+        print(f"  {'- 注意力头数:':<28} {model_config.num_attention_heads}")
+    if hasattr(model_config, "vocab_size"):
+        print(f"  {'- 词表大小:':<28} {model_config.vocab_size}")
+    print(f"{'训练数据:':<30}")
+    print(f"  {'- 数据目录:':<28} {args.data_dir}")
+    print(f"  {'- 文件模式:':<28} {args.file_pattern}")
+    print(f"  {'- 数据样本数:':<28} {len(train_dataset):,}")
+    print(f"  {'- 最大序列长度:':<28} {args.max_seq_length}")
+    print(f"{'训练设置:':<30}")
+    print(f"  {'- GPU数量:':<28} {gpu_count}")
+    print(f"  {'- 每设备批次大小:':<28} {args.per_device_train_batch_size}")
+    print(f"  {'- 梯度累积步数:':<28} {args.gradient_accumulation_steps}")
+    print(f"  {'- 有效总批次大小:':<28} {effective_batch_size}")
+    
+    if args.max_steps > 0:
+        print(f"  {'- 训练步数:':<28} {args.max_steps:,}")
+        print(f"  {'- 预计总样本数:':<28} {args.max_steps * effective_batch_size:,} (约{args.max_steps * effective_batch_size / len(train_dataset):.2f}轮)")
+    else:
+        print(f"  {'- 训练轮次:':<28} {args.num_train_epochs}")
+        estimated_steps = int(len(train_dataset) * args.num_train_epochs / effective_batch_size)
+        print(f"  {'- 预计总步数:':<28} {estimated_steps:,}")
+    
+    print(f"{'优化器设置:':<30}")
+    print(f"  {'- 学习率:':<28} {args.learning_rate}")
+    print(f"  {'- 权重衰减:':<28} {args.weight_decay}")
+    print(f"  {'- FP16混合精度:':<28} {'启用' if args.fp16 else '禁用'}")
+    print(f"  {'- 梯度检查点:':<28} {'启用' if args.gradient_checkpointing else '禁用'}")
+    print(f"  {'- DeepSpeed:':<28} {'启用' if args.deepspeed else '禁用'}")
+    
+    print(f"{'保存与日志:':<30}")
+    print(f"  {'- 输出目录:':<28} {args.output_dir}")
+    print(f"  {'- 日志步数:':<28} {args.logging_steps}")
+    print(f"  {'- 保存步数:':<28} {args.save_steps}")
+    print(f"  {'- WandB跟踪:':<28} {'启用' if args.use_wandb else '禁用'}")
+    if args.use_wandb:
+        print(f"  {'- WandB项目:':<28} {args.wandb_project}")
+        print(f"  {'- WandB运行名称:':<28} {wandb.run.name if wandb.run else args.wandb_name}")
+    
+    print(f"{'其他信息:':<30}")
+    print(f"  {'- 随机种子:':<28} {args.seed}")
+    print(f"  {'- 预计训练时长:':<28} {'计算中...'}")
+    print(f"{separator}")
+    print(f"{'训练已开始...'}")
+    print(f"{separator}\n")
+
 def main():
     args = parse_args()
     set_seed(args.seed)
@@ -320,6 +389,11 @@ def main():
     logger.info(f"加载模型: {args.model_name_or_path}")
     
     model_config = AutoConfig.from_pretrained(args.model_name_or_path)
+    
+    # 处理滑动窗口注意力的警告
+    if hasattr(model_config, "sliding_window") and model_config.sliding_window is not None:
+        logger.warning(f"模型使用滑动窗口注意力(window size={model_config.sliding_window})，禁用SDPA以避免警告")
+        os.environ["TRANSFORMERS_NO_SDPA"] = "true"
     
     # 启用梯度检查点以节省GPU内存
     if args.gradient_checkpointing:
@@ -348,6 +422,13 @@ def main():
         file_pattern=args.file_pattern
     )
     
+    # 计算有效批次大小
+    gpu_count = torch.cuda.device_count()
+    effective_batch_size = args.per_device_train_batch_size * gpu_count * args.gradient_accumulation_steps
+    
+    # 漂亮地打印训练配置
+    print_training_config(args, model_config, train_dataset, effective_batch_size)
+    
     # 创建数据整理器
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
@@ -355,6 +436,21 @@ def main():
     )
     
     # 配置训练参数
+    # 确保max_steps和num_train_epochs至少有一个有效值
+    if args.max_steps is None or args.max_steps <= 0:
+        if args.num_train_epochs is None or args.num_train_epochs <= 0:
+            logger.info("既没有设置有效的max_steps也没有设置有效的num_train_epochs，设置默认值max_steps=1000")
+            max_steps = 1000
+            num_train_epochs = None
+        else:
+            logger.info(f"使用num_train_epochs={args.num_train_epochs}训练")
+            max_steps = -1
+            num_train_epochs = args.num_train_epochs
+    else:
+        logger.info(f"使用max_steps={args.max_steps}训练")
+        max_steps = args.max_steps
+        num_train_epochs = None
+    
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True if last_checkpoint is None else False,
@@ -362,8 +458,8 @@ def main():
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        num_train_epochs=args.num_train_epochs if args.max_steps <= 0 else None,  # 添加轮次参数
-        max_steps=args.max_steps if args.max_steps > 0 else None,  # 如果max_steps大于0，使用它
+        max_steps=max_steps,
+        num_train_epochs=num_train_epochs,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
         fp16=args.fp16,
@@ -372,8 +468,9 @@ def main():
         remove_unused_columns=False,
         logging_dir=os.path.join(args.output_dir, "logs"),
         dataloader_num_workers=4,
-        report_to=["wandb"] if args.use_wandb else None,
-        local_rank=args.local_rank,
+        report_to=["tensorboard", "wandb"] if args.use_wandb else ["tensorboard"],
+        # 确保其他参数也有默认值
+        local_rank=getattr(args, "local_rank", -1),
         ddp_find_unused_parameters=False,
     )
     
