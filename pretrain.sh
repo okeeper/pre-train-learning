@@ -5,8 +5,9 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --wandb_name qwen_novel_pretrain_stage1 \
   --file_pattern "xd_chunks_32.json,xd_chunks_128.json" \
   --per_device_train_batch_size 8 \
+  --gradient_accumulation_steps 2 \
   --max_seq_length 128 \
-  --num_train_epochs 0.7 \
+  --num_train_epochs 0.5 \
   --learning_rate 1e-5 \
   --use_wandb
 
@@ -17,6 +18,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --wandb_name qwen_novel_pretrain_stage2 \
   --file_pattern "xd_chunks_1024.json" \
   --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 4 \
   --max_seq_length 1024 \
   --num_train_epochs 0.7 \
   --learning_rate 1e-5 \
@@ -29,6 +31,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --wandb_name qwen_novel_pretrain_final \
   --file_pattern "xd_chunks_4096.json" \
   --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 4 \
   --max_seq_length 4096 \
   --num_train_epochs 0.7 \
   --learning_rate 1e-5 \
@@ -42,6 +45,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --wandb_name qwen_novel_pretrain_knowledge \
   --file_pattern "xd_knowledge_graph.json" \
   --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 4 \
   --max_seq_length 512 \
   --num_train_epochs 1.0 \
   --learning_rate 1e-5 \
