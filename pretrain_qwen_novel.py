@@ -7,9 +7,9 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import transformers
 from transformers import (
-    QWenModel, 
-    QWenConfig, 
-    QWenTokenizer,
+    AutoModelForCausalLM,  # 替换 QWenModel
+    AutoConfig,            # 替换 QWenConfig
+    AutoTokenizer,         # 替换 QWenTokenizer
     Trainer, 
     TrainingArguments,
     DataCollatorForLanguageModeling,
@@ -168,7 +168,7 @@ def parse_args():
 
 # 自定义数据集类，用于加载多个JSON文件
 class NovelChunksDataset(Dataset):
-    def __init__(self, data_dir: str, tokenizer: QWenTokenizer, max_seq_length: int, file_pattern: str = "xd_chunks_*.json"):
+    def __init__(self, data_dir: str, tokenizer: AutoTokenizer, max_seq_length: int, file_pattern: str = "xd_chunks_*.json"):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
         self.examples = []
@@ -319,15 +319,15 @@ def main():
     # 加载Qwen模型和分词器
     logger.info(f"加载模型: {args.model_name_or_path}")
     
-    model_config = QWenConfig.from_pretrained(args.model_name_or_path)
+    model_config = AutoConfig.from_pretrained(args.model_name_or_path)
     
     # 启用梯度检查点以节省GPU内存
     if args.gradient_checkpointing:
         model_config.use_cache = False
         logger.info("启用梯度检查点以节省GPU内存")
     
-    tokenizer = QWenTokenizer.from_pretrained(args.model_name_or_path)
-    model = QWenModel.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
+    model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path, 
         config=model_config
     )
