@@ -52,12 +52,15 @@ def main():
     parser = argparse.ArgumentParser(description="运行大语言模型聊天")
     parser.add_argument("--model_path", type=str, required=True, default="Qwen/Qwen2.5-1.5B-Instruct", help="模型路径")
     parser.add_argument("--lora_path", type=str, default=None, help="LoRA权重路径（可选）")
+    parser.add_argument("--max_length", type=int, default=1024, help="生成文本的最大长度（默认：1024）")
+    parser.add_argument("--temperature", type=float, default=0.7, help="生成文本的温度参数（默认：0.7）")
     args = parser.parse_args()
     
     # 加载模型和分词器
     model, tokenizer = load_model_and_tokenizer(args.model_path, args.lora_path)
     
     print("模型加载完成！开始对话（输入'quit'退出，输入'clear'清除历史记录）：")
+    print(f"当前设置：max_length={args.max_length}, temperature={args.temperature}")
     
     # 使用deque保存最近3条对话历史
     history = deque(maxlen=3)
@@ -78,7 +81,14 @@ def main():
         prompt = f"用户：{user_input}\n助手："
         
         try:
-            response = generate_response(model, tokenizer, prompt, history=list(history))
+            response = generate_response(
+                model, 
+                tokenizer, 
+                prompt, 
+                history=list(history),
+                max_length=args.max_length,
+                temperature=args.temperature
+            )
             # 提取助手的回复部分
             assistant_response = response.split("助手：")[-1].strip()
             print(f"\n助手: {assistant_response}")

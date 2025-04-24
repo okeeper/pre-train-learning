@@ -95,3 +95,12 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --save_steps 500 \
   --use_wandb
 ```
+
+## chat
+```
+python test_chat.py --model_path output/qwen_novel_pretrain_stage2
+
+
+# 使用LoRA
+python test_chat.py --model_path /path/to/your/model --lora_path /path/to/your/lora
+```
