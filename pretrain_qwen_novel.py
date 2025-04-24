@@ -20,6 +20,7 @@ import logging
 import argparse
 from datasets import load_dataset
 import wandb  # 导入wandb包
+from datetime import datetime
 
 # 设置日志
 logging.basicConfig(
@@ -456,22 +457,34 @@ def main():
     
     model_config = AutoConfig.from_pretrained(args.model_name_or_path)
     
-    # 处理滑动窗口注意力的警告
-    if hasattr(model_config, "sliding_window") and model_config.sliding_window is not None:
-        logger.warning(f"模型使用滑动窗口注意力(window size={model_config.sliding_window})，禁用SDPA以避免警告")
-        os.environ["TRANSFORMERS_NO_SDPA"] = "true"
-    
     # 启用梯度检查点以节省GPU内存
     if args.gradient_checkpointing:
         model_config.use_cache = False
         logger.info("启用梯度检查点以节省GPU内存")
     
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
+    
+    # 决定正确的设备映射和torch dtype
+    if deepspeed_plugin is not None:
+        # 使用DeepSpeed时，按DeepSpeed要求配置
+        device_map = None
+        torch_dtype = deepspeed_plugin.get_dtype() if hasattr(deepspeed_plugin, "get_dtype") else None
+        logger.info(f"DeepSpeed配置: device_map=None, dtype={torch_dtype}")
+    else:
+        # 非DeepSpeed模式，使用自动设备映射
+        device_map = "auto"
+        torch_dtype = torch.float16 if args.fp16 else None
+        logger.info(f"常规配置: device_map={device_map}, dtype={torch_dtype}")
+    
+    # 加载模型
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_name_or_path, 
-        config=model_config
+        args.model_name_or_path,
+        config=model_config,
+        device_map=device_map,
+        torch_dtype=torch_dtype
     )
     
+    # 梯度检查点
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
     
@@ -530,14 +543,16 @@ def main():
         save_steps=args.save_steps,
         fp16=args.fp16,
         deepspeed=args.deepspeed,
+        # 添加以下参数
+        local_rank=getattr(args, "local_rank", -1),
+        dataloader_drop_last=True,  # 防止最后一个批次大小不匹配
+        ddp_find_unused_parameters=False,  # 优化分布式训练
         save_total_limit=3,  # 仅保存最后3个检查点
         remove_unused_columns=False,
         logging_dir=os.path.join(args.output_dir, "logs"),
         dataloader_num_workers=4,
         report_to=["wandb"] if args.use_wandb else [],
-        # 确保其他参数也有默认值
-        local_rank=getattr(args, "local_rank", -1),
-        ddp_find_unused_parameters=False,
+        run_name=f"qwen-pretrain-custom-{datetime.now().strftime('%Y%m%d-%H%M%S')}"  # 解决wandb警告
     )
     
     # 初始化Trainer
