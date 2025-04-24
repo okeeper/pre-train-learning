@@ -438,9 +438,6 @@ def main():
     args = parse_args()
     set_seed(args.seed)
     
-    # 检查依赖关系
-    tensorboard_missing = check_dependencies()
-    
     # 配置多GPU训练
     args = setup_parallel_training(args)
     
@@ -519,13 +516,6 @@ def main():
         logger.info(f"使用max_steps={args.max_steps}训练")
         max_steps = args.max_steps
         num_train_epochs = None
-    
-    # 根据依赖检查结果调整report_to设置
-    report_options = []
-    if args.use_wandb:
-        report_options.append("wandb")
-    if not tensorboard_missing:
-        report_options.append("tensorboard")
     
     training_args = TrainingArguments(
         output_dir=args.output_dir,
