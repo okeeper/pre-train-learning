@@ -403,36 +403,38 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print(separator)
     print("\n")
 
-class CustomLoggingCallback(TrainerCallback):
+class SimpleLoggingCallback(TrainerCallback):
     def __init__(self, is_main_process=True):
         self.is_main_process = is_main_process
-        self.last_log_time = time.time()
-        self.log_interval = 10  # 每10秒记录一次进度
     
     def on_log(self, args, state, control, logs=None, **kwargs):
-        if not self.is_main_process:
+        # 只在主进程上报
+        if not self.is_main_process or logs is None:
             return
         
-        current_time = time.time()
-        if current_time - self.last_log_time >= self.log_interval:
-            self.last_log_time = current_time
-            
-            # 构建完整的日志信息
-            log_str = []
-            for k, v in sorted(logs.items()):
-                if isinstance(v, float):
-                    log_str.append(f"{k}: {v:.4f}")
-                else:
-                    log_str.append(f"{k}: {v}")
-            
-            # 添加进度信息
-            if state.max_steps > 0:
-                progress = f"步骤: {state.global_step}/{state.max_steps} ({100*state.global_step/state.max_steps:.1f}%)"
+        # 构建日志信息
+        log_str = []
+        for k, v in sorted(logs.items()):
+            if isinstance(v, float):
+                log_str.append(f"{k}: {v:.4f}")
             else:
-                progress = f"步骤: {state.global_step}"
-            
-            # 合并并打印完整的一行
-            logger.info(f"{progress} - {', '.join(log_str)}")
+                log_str.append(f"{k}: {v}")
+        
+        # 添加进度信息
+        if state.max_steps > 0:
+            progress = f"步骤: {state.global_step}/{state.max_steps} ({100*state.global_step/state.max_steps:.1f}%)"
+        else:
+            progress = f"步骤: {state.global_step}"
+        
+        # 打印完整日志
+        logger.info(f"{progress} - {', '.join(log_str)}")
+        
+        # 简单上报到wandb
+        if args.use_wandb and wandb.run is not None:
+            # 只记录数值型指标
+            wandb_logs = {k: v for k, v in logs.items() if isinstance(v, (int, float))}
+            # 记录到wandb
+            wandb.log(wandb_logs)
 
 def main():
     args = parse_args()
@@ -536,7 +538,7 @@ def main():
         args=training_args,
         data_collator=data_collator,
         train_dataset=train_dataset,
-        callbacks=[CustomLoggingCallback(is_main_process=is_main_process)]  # 添加自定义回调
+        callbacks=[SimpleLoggingCallback(is_main_process=is_main_process)]  # 添加自定义回调
     )
     
     # 监控模型(仅主进程)
