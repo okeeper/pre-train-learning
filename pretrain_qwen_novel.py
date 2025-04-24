@@ -125,7 +125,7 @@ def parse_args():
         "--file_pattern",
         type=str,
         default="xd_chunks_*.json",
-        help="用于匹配数据文件的通配符模式",
+        help="用于匹配数据文件的通配符模式，可用逗号分隔多个模式",
     )
     parser.add_argument(
         "--local_rank",
@@ -173,22 +173,37 @@ class NovelChunksDataset(Dataset):
         self.max_seq_length = max_seq_length
         self.examples = []
         
+        # 处理逗号分隔的模式
+        patterns = [p.strip() for p in file_pattern.split(',')]
+        json_files = []
+        
         # 获取所有符合文件模式的JSON文件
-        json_files = glob.glob(os.path.join(data_dir, file_pattern))
+        for pattern in patterns:
+            matched_files = glob.glob(os.path.join(data_dir, pattern))
+            json_files.extend(matched_files)
+        
+        # 去除可能的重复文件
+        json_files = list(set(json_files))
+        
         logger.info(f"找到{len(json_files)}个数据文件: {json_files}")
         
         # 加载所有文件的数据
         for json_file in json_files:
-            with open(json_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    for item in data:
-                        if "text" in item:
-                            self.examples.append(item["text"])
-                        elif isinstance(item, str):
-                            self.examples.append(item)
-                else:
-                    logger.warning(f"文件{json_file}格式不符合预期")
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict) and "text" in item:
+                                self.examples.append(item["text"])
+                            elif isinstance(item, str):
+                                self.examples.append(item)
+                    elif isinstance(data, dict) and "text" in data:
+                        self.examples.append(data["text"])
+                    else:
+                        logger.warning(f"文件{json_file}格式不符合预期: {type(data)}")
+            except Exception as e:
+                logger.error(f"处理文件{json_file}时出错: {str(e)}")
         
         logger.info(f"总共加载了{len(self.examples)}个文本片段")
 
