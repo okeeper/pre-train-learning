@@ -70,3 +70,22 @@ conda deactivate
 # 删除环境（如需要）
 conda remove --name novel_qa --all
 ```
+
+
+# 预训练
+
+```
+python pretrain_qwen_novel.py \
+  --output_dir output/qwen1.5b_xd_pretrain \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 2 \
+  --learning_rate 1e-5 \
+  --weight_decay 0.01 \
+  --max_seq_length 4096 \
+  --fp16 \
+  --gradient_checkpointing \
+  --num_train_epochs 3.0 \
+  --logging_steps 10 \
+  --save_steps 500 \
+  --use_wandb
+```
