@@ -7,9 +7,9 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import transformers
 from transformers import (
-    AutoModelForCausalLM,  # 替换 QWenModel
-    AutoConfig,            # 替换 QWenConfig
-    AutoTokenizer,         # 替换 QWenTokenizer
+    AutoModelForCausalLM,
+    AutoConfig,
+    AutoTokenizer,
     Trainer, 
     TrainingArguments,
     DataCollatorForLanguageModeling,
@@ -19,7 +19,7 @@ from transformers.trainer_utils import get_last_checkpoint
 import logging
 import argparse
 from datasets import load_dataset
-import wandb  # 导入wandb包
+import wandb
 from datetime import datetime
 
 # 设置日志
@@ -52,15 +52,15 @@ def parse_args():
         help="保存模型和日志的输出目录",
     )
     parser.add_argument(
-        "--per_device_train_batch_size",
+        "--train_batch_size",
         type=int,
         default=1,
-        help="每个GPU的训练批次大小",
+        help="训练批次大小",
     )
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
-        default=1,
+        default=8,
         help="梯度累积步数",
     )
     parser.add_argument(
@@ -84,7 +84,7 @@ def parse_args():
     parser.add_argument(
         "--max_steps",
         type=int,
-        default=-1,  # 默认值为-1，表示使用num_train_epochs
+        default=-1,
         help="训练的最大步数，设为-1时使用num_train_epochs参数",
     )
     parser.add_argument(
@@ -102,7 +102,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=2048,
+        default=1024,  # 修改默认值为更合理的1024
         help="最大序列长度",
     )
     parser.add_argument(
@@ -117,38 +117,25 @@ def parse_args():
         help="是否使用混合精度训练",
     )
     parser.add_argument(
-        "--deepspeed",
-        type=str,
-        default=None,
-        help="DeepSpeed配置文件路径",
-    )
-    parser.add_argument(
         "--file_pattern",
         type=str,
         default="xd_chunks_*.json",
         help="用于匹配数据文件的通配符模式，可用逗号分隔多个模式",
     )
     parser.add_argument(
-        "--local_rank",
-        type=int,
-        default=-1,
-        help="用于分布式训练的本地排名",
-    )
-    parser.add_argument(
         "--gradient_checkpointing",
         action="store_true", 
-        default=True,
         help="启用梯度检查点以节省内存",
     )
     parser.add_argument(
         "--use_wandb",
         action="store_true",
-        default=True,
         help="是否使用Weights & Biases进行实验跟踪",
     )
     parser.add_argument(
         "--wandb_project",
         type=str,
+        default="qwen-pretraining",
         help="Weights & Biases项目名称",
     )
     parser.add_argument(
@@ -234,46 +221,6 @@ class NovelChunksDataset(Dataset):
         
         return item
 
-def setup_parallel_training(args):
-    """配置并行训练环境"""
-    num_gpus = torch.cuda.device_count()
-    logger.info(f"检测到 {num_gpus} 个GPU设备")
-    
-    if num_gpus > 1:
-        logger.info(f"将使用所有 {num_gpus} 个GPU进行训练")
-        # 如果未指定deepspeed但有多个GPU可用，自动生成配置
-        if args.deepspeed is None:
-            logger.info("自动生成DeepSpeed配置")
-            ds_config = {
-                "fp16": {"enabled": args.fp16},
-                "optimizer": {
-                    "type": "AdamW",
-                    "params": {
-                        "lr": args.learning_rate,
-                        "weight_decay": args.weight_decay
-                    }
-                },
-                "zero_optimization": {
-                    "stage": 2,
-                    "offload_optimizer": {"device": "cpu", "pin_memory": True},
-                    "contiguous_gradients": True,
-                    "overlap_comm": True
-                },
-                "gradient_accumulation_steps": "auto",  # 使用auto
-                "train_batch_size": "auto",  # 使用auto
-                "train_micro_batch_size_per_gpu": "auto"  # 使用auto
-            }
-            
-            # 保存生成的配置
-            ds_config_path = os.path.join(args.output_dir, "ds_auto_config.json")
-            os.makedirs(args.output_dir, exist_ok=True)
-            with open(ds_config_path, 'w') as f:
-                json.dump(ds_config, f, indent=2)
-            
-            args.deepspeed = ds_config_path
-            logger.info(f"自动生成的DeepSpeed配置已保存到：{ds_config_path}")
-    
-    return args
 
 def setup_wandb(args):
     """设置Weights & Biases记录"""
@@ -281,22 +228,16 @@ def setup_wandb(args):
         logger.info("初始化Weights & Biases")
         run_name = args.wandb_name if args.wandb_name else f"qwen-pretrain-{args.model_name_or_path.split('/')[-1]}"
         
-        # 设置默认项目名称（如果未指定）
-        project_name = args.wandb_project if args.wandb_project else "qwen-pretraining"
-        
         # 初始化wandb
         wandb.init(
-            project=project_name,
+            project=args.wandb_project,
             name=run_name,
             config=vars(args)
         )
         
-        # 将项目名称回填到args中
-        args.wandb_project = project_name
-        
         # 记录环境信息
         wandb.config.update({
-            "gpu_count": torch.cuda.device_count(),
+            "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             "gpu_type": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None",
             "pytorch_version": torch.__version__,
             "transformers_version": transformers.__version__,
@@ -313,17 +254,18 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     # 获取当前时间
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # 计算有效批次大小
-    gpu_count = torch.cuda.device_count()
-    
     # 估算模型参数量
     params_count = ""
     if hasattr(model_config, "num_hidden_layers") and hasattr(model_config, "hidden_size"):
         hidden_size = model_config.hidden_size
         n_layers = model_config.num_hidden_layers
         if hasattr(model_config, "vocab_size"):
-            estimated_params = (12 * hidden_size * hidden_size * n_layers) / 1_000_000
-            params_count = f"约 {estimated_params:.1f}B 参数"
+            vocab_size = model_config.vocab_size
+            # 估算参数量（基于Transformer架构的粗略估计）
+            emb_params = vocab_size * hidden_size  # 词嵌入参数
+            layer_params = 12 * hidden_size * hidden_size * n_layers  # 每层参数
+            estimated_params = (emb_params + layer_params) / 1_000_000
+            params_count = f"约 {estimated_params:.1f}M 参数"
     
     # 使用简单的分隔线
     separator = "-" * 80
@@ -358,8 +300,8 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     
     # 训练设置部分
     print("\n训练设置:")
-    print(f"\tGPU数量:\t{gpu_count} GPU")
-    print(f"\t每设备批次大小:\t{args.per_device_train_batch_size}")
+    print(f"\t设备:\t{'CUDA' if torch.cuda.is_available() else 'CPU'}")
+    print(f"\t批次大小:\t{args.train_batch_size}")
     print(f"\t梯度累积步数:\t{args.gradient_accumulation_steps}")
     print(f"\t有效总批次大小:\t{effective_batch_size}")
     
@@ -382,7 +324,6 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print("\n加速技术:")
     print(f"\tFP16混合精度:\t{'启用' if args.fp16 else '禁用'}")
     print(f"\t梯度检查点:\t{'启用' if args.gradient_checkpointing else '禁用'}")
-    print(f"\tDeepSpeed:\t{'启用' if args.deepspeed else '禁用'}")
     
     # 保存与监控部分
     print("\n保存与监控:")
@@ -391,7 +332,6 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print(f"\t保存步数:\t{args.save_steps}")
     print(f"\tWeights & Biases:\t{'启用' if args.use_wandb else '禁用'}")
     if args.use_wandb and wandb.run:
-        # 添加检查，确保 wandb_project 不为 None
         if args.wandb_project:
             print(f"\tWandB项目:\t{args.wandb_project}")
         else:
@@ -410,10 +350,10 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
         total_steps = int(len(train_dataset) * args.num_train_epochs / effective_batch_size)
     
     # 计算粗略的训练时间估计
-    tokens_per_second = 1000  # 粗略估计，实际取决于硬件
-    if gpu_count > 0 and hasattr(model_config, 'hidden_size'):
+    tokens_per_second = 500  # 单GPU粗略估计，实际取决于硬件
+    if torch.cuda.is_available() and hasattr(model_config, 'hidden_size'):
         size_factor = model_config.hidden_size / 1024
-        tokens_per_second = tokens_per_second / size_factor * gpu_count
+        tokens_per_second = tokens_per_second / size_factor
         
     estimated_seconds = (tokens_per_step * total_steps) / tokens_per_second
     estimated_hours = estimated_seconds / 3600
@@ -439,8 +379,8 @@ def main():
     args = parse_args()
     set_seed(args.seed)
     
-    # 配置多GPU训练
-    args = setup_parallel_training(args)
+    # 创建输出目录
+    os.makedirs(args.output_dir, exist_ok=True)
     
     # 初始化wandb
     using_wandb = setup_wandb(args)
@@ -452,7 +392,7 @@ def main():
         if last_checkpoint is not None:
             logger.info(f"找到检查点: {last_checkpoint}，将从此处恢复训练")
     
-    # 加载Qwen模型和分词器
+    # 加载模型和分词器
     logger.info(f"加载模型: {args.model_name_or_path}")
     
     model_config = AutoConfig.from_pretrained(args.model_name_or_path)
@@ -462,35 +402,24 @@ def main():
         model_config.use_cache = False
         logger.info("启用梯度检查点以节省GPU内存")
     
+    # 加载分词器
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
-    
-    # 决定正确的设备映射和torch dtype
-    if deepspeed_plugin is not None:
-        # 使用DeepSpeed时，按DeepSpeed要求配置
-        device_map = None
-        torch_dtype = deepspeed_plugin.get_dtype() if hasattr(deepspeed_plugin, "get_dtype") else None
-        logger.info(f"DeepSpeed配置: device_map=None, dtype={torch_dtype}")
-    else:
-        # 非DeepSpeed模式，使用自动设备映射
-        device_map = "auto"
-        torch_dtype = torch.float16 if args.fp16 else None
-        logger.info(f"常规配置: device_map={device_map}, dtype={torch_dtype}")
-    
-    # 加载模型
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name_or_path,
-        config=model_config,
-        device_map=device_map,
-        torch_dtype=torch_dtype
-    )
-    
-    # 梯度检查点
-    if args.gradient_checkpointing:
-        model.gradient_checkpointing_enable()
-    
-    # 设置tokenizer和模型用于预训练
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+    
+    # 加载模型
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"使用设备: {device}")
+    
+    # 使用auto模式，torch会自动选择适合的数据类型
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model_name_or_path, 
+        config=model_config,
+        torch_dtype=torch.float16 if args.fp16 and torch.cuda.is_available() else None
+    )
+    
+    if args.gradient_checkpointing:
+        model.gradient_checkpointing_enable()
     
     # 加载训练数据
     logger.info(f"加载训练数据，使用文件模式: {args.file_pattern}")
@@ -502,10 +431,9 @@ def main():
     )
     
     # 计算有效批次大小
-    gpu_count = torch.cuda.device_count()
-    effective_batch_size = args.per_device_train_batch_size * gpu_count * args.gradient_accumulation_steps
+    effective_batch_size = args.train_batch_size * args.gradient_accumulation_steps
     
-    # 漂亮地打印训练配置
+    # 打印训练配置
     print_training_config(args, model_config, train_dataset, effective_batch_size)
     
     # 创建数据整理器
@@ -514,7 +442,6 @@ def main():
         mlm=False,  # 使用自回归语言建模而非掩码语言建模
     )
     
-    # 配置训练参数
     # 确保max_steps和num_train_epochs至少有一个有效值
     if args.max_steps is None or args.max_steps <= 0:
         if args.num_train_epochs is None or args.num_train_epochs <= 0:
@@ -530,10 +457,11 @@ def main():
         max_steps = args.max_steps
         num_train_epochs = None
     
+    # 配置训练参数
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True if last_checkpoint is None else False,
-        per_device_train_batch_size=args.per_device_train_batch_size,
+        per_device_train_batch_size=args.train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
@@ -541,18 +469,13 @@ def main():
         num_train_epochs=num_train_epochs,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
-        fp16=args.fp16,
-        deepspeed=args.deepspeed,
-        # 添加以下参数
-        local_rank=getattr(args, "local_rank", -1),
-        dataloader_drop_last=True,  # 防止最后一个批次大小不匹配
-        ddp_find_unused_parameters=False,  # 优化分布式训练
+        fp16=args.fp16 and torch.cuda.is_available(),
         save_total_limit=3,  # 仅保存最后3个检查点
         remove_unused_columns=False,
         logging_dir=os.path.join(args.output_dir, "logs"),
-        dataloader_num_workers=4,
+        dataloader_num_workers=2,  # 降低为单线程优化
         report_to=["wandb"] if args.use_wandb else [],
-        run_name=f"qwen-pretrain-custom-{datetime.now().strftime('%Y%m%d-%H%M%S')}"  # 解决wandb警告
+        run_name=f"qwen-pretrain-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
     )
     
     # 初始化Trainer
@@ -580,15 +503,12 @@ def main():
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
     
-    # 如果启用了wandb模型记录
+    # 如果使用wandb，记录模型和完成运行
     if args.use_wandb:
         logger.info("将模型上传到Weights & Biases")
         artifact = wandb.Artifact(name=f"model-{wandb.run.id}", type="model")
         artifact.add_dir(args.output_dir)
         wandb.log_artifact(artifact)
-    
-    # 如果使用wandb，完成运行
-    if args.use_wandb:
         wandb.finish()
     
     logger.info("预训练完成!")

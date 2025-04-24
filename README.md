@@ -80,7 +80,7 @@ conda activate llama-factory
 
 
 ```
-python pretrain_qwen_novel.py \
+deepspeed pretrain_qwen_novel.py \
   --output_dir output/qwen1.5b_xd_pretrain \
   --file_pattern xd_chunks_32.json,xd_chunks_128.json,xd_chunks_1024.json,xd_chunks_4096.json \
   --per_device_train_batch_size 2 \
