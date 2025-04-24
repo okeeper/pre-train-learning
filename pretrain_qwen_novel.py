@@ -258,9 +258,9 @@ def setup_parallel_training(args):
                     "contiguous_gradients": True,
                     "overlap_comm": True
                 },
-                "gradient_accumulation_steps": args.gradient_accumulation_steps,
-                "train_batch_size": args.per_device_train_batch_size * num_gpus * args.gradient_accumulation_steps,
-                "train_micro_batch_size_per_gpu": args.per_device_train_batch_size
+                "gradient_accumulation_steps": "auto",  # 使用auto
+                "train_batch_size": "auto",  # 使用auto
+                "train_micro_batch_size_per_gpu": "auto"  # 使用auto
             }
             
             # 保存生成的配置
