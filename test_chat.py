@@ -23,7 +23,7 @@ def load_model_and_tokenizer(model_path, lora_path=None):
     
     return model, tokenizer
 
-def generate_response(model, tokenizer, prompt, history=None, max_length=1024, temperature=0.7):
+def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=1024, temperature=0.7):
     """生成回复，可包含历史对话"""
     # 构建包含历史记录的完整提示
     full_prompt = prompt
@@ -37,7 +37,7 @@ def generate_response(model, tokenizer, prompt, history=None, max_length=1024, t
     
     outputs = model.generate(
         **inputs,
-        max_length=max_length,
+        max_new_tokens=max_new_tokens,
         temperature=temperature,
         num_return_sequences=1,
         do_sample=True,
@@ -52,7 +52,7 @@ def main():
     parser = argparse.ArgumentParser(description="运行大语言模型聊天")
     parser.add_argument("--model_path", type=str, required=True, default="Qwen/Qwen2.5-1.5B-Instruct", help="模型路径")
     parser.add_argument("--lora_path", type=str, default=None, help="LoRA权重路径（可选）")
-    parser.add_argument("--max_length", type=int, default=1024, help="生成文本的最大长度（默认：1024）")
+    parser.add_argument("--max_new_tokens", type=int, default=1024, help="生成的最大新token数量（默认：1024）")
     parser.add_argument("--temperature", type=float, default=0.7, help="生成文本的温度参数（默认：0.7）")
     args = parser.parse_args()
     
@@ -60,7 +60,7 @@ def main():
     model, tokenizer = load_model_and_tokenizer(args.model_path, args.lora_path)
     
     print("模型加载完成！开始对话（输入'quit'退出，输入'clear'清除历史记录）：")
-    print(f"当前设置：max_length={args.max_length}, temperature={args.temperature}")
+    print(f"当前设置：max_new_tokens={args.max_new_tokens}, temperature={args.temperature}")
     
     # 使用deque保存最近3条对话历史
     history = deque(maxlen=3)
@@ -86,7 +86,7 @@ def main():
                 tokenizer, 
                 prompt, 
                 history=list(history),
-                max_length=args.max_length,
+                max_new_tokens=args.max_new_tokens,
                 temperature=args.temperature
             )
             # 提取助手的回复部分
