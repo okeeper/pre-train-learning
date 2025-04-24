@@ -115,16 +115,12 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
             # 先检查是否是卷标题
             if volume_pattern1.match(line):
                 current_volume = volume_pattern1.match(line).group(1)
-                print(f"卷名1: {current_volume}")
             elif volume_pattern2.match(line):
                 current_volume = volume_pattern2.match(line).group(1)
-                print(f"卷名2: {current_volume}")
             elif volume_pattern3.match(line):
                 current_volume = volume_pattern3.match(line).group(1)
-                print(f"卷名3: {current_volume}")
             if special_volume_pattern.match(line):
                 current_volume = special_volume_pattern.match(line).group(1)
-                print(f"卷名4: {current_volume}")
                       
             # 判断是否是章节标题（包括常规章节、特殊章节和复杂格式章节）
             if (chapter_pattern.match(line) or 
@@ -176,7 +172,8 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
         if len(chapter_content) < min_chunk_size:
             chunks.append({
                 "chapter_title": novel_name + " " + chapter_title,
-                "content": novel_name + " " + chapter_title + "\n" + chapter_content
+                "text": novel_name + " " + chapter_title + "\n" + chapter_content,
+                "length": len(chapter_content)
             })
             continue
         
@@ -296,7 +293,7 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
             
             chunks.append({
                 "chapter_title": novel_name + " " +chunk_title,
-                "content": novel_name + " " + chunk_title + "\n" + chunk_text,
+                "text": novel_name + " " + chunk_title + "\n" + chunk_text,
                 "length": group["length"]
             })
     

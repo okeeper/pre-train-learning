@@ -237,7 +237,7 @@ def setup_wandb(args):
     """设置Weights & Biases记录"""
     if args.use_wandb:  # 只在主进程初始化wandb
         logger.info("初始化Weights & Biases")
-        run_name = args.wandb_name if args.wandb_name else f"qwen-pretrain-{args.model_name_or_path.split('/')[-1]}"
+        run_name = args.wandb_name if args.wandb_name else f"qwen-pretrain-{args.output_dir.split('/')[-1]}"
         
         # 初始化wandb
         wandb.init(
