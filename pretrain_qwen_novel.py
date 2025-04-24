@@ -78,7 +78,7 @@ def parse_args():
     parser.add_argument(
         "--num_train_epochs",
         type=float,
-        default=3.0,
+        default=1.0,
         help="训练轮次数",
     )
     parser.add_argument(
@@ -90,7 +90,7 @@ def parse_args():
     parser.add_argument(
         "--logging_steps",
         type=int,
-        default=10,
+        default=5,
         help="日志记录步数",
     )
     parser.add_argument(
@@ -509,9 +509,8 @@ def main():
         
         # wandb记录(仅主进程)
         if args.use_wandb:
-            artifact = wandb.Artifact(name=f"model-{wandb.run.id}", type="model")
-            artifact.add_dir(args.output_dir)
-            wandb.log_artifact(artifact)
+            # 不上传模型，只记录训练完成
+            logger.info("记录训练指标到wandb，不上传模型")
             wandb.finish()
     
     logger.info("预训练完成!")
