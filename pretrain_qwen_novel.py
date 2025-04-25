@@ -407,13 +407,22 @@ class SimpleLoggingCallback(TrainerCallback):
     def __init__(self, is_main_process=True, use_wandb=False):
         self.is_main_process = is_main_process
         self.use_wandb = use_wandb
+        self.start_time = time.time()
+        self.last_log_time = self.start_time
+        self.total_tokens = 0
+        self.last_tokens = 0
     
-    def on_log(self, args, state, control, logs=None, **kwargs):
+    def on_log(self, args, control, logs=None, **kwargs):
         # 只在主进程上报
         if not self.is_main_process or logs is None:
             return
         
-        # 构建日志信息
+        # 获取当前时间
+        current_time = time.time()
+        time_diff = current_time - self.last_log_time
+        total_elapsed = current_time - self.start_time
+        
+        # 构建基本日志信息
         log_str = []
         for k, v in sorted(logs.items()):
             if isinstance(v, float):
@@ -421,19 +430,57 @@ class SimpleLoggingCallback(TrainerCallback):
             else:
                 log_str.append(f"{k}: {v}")
         
+        # 处理进度信息
+        step = logs.get("step", 0)
+        epoch = logs.get("epoch", 0)
+        
+        # 更新token计数
+        current_tokens = 0
+        if "loss" in logs and hasattr(args, "per_device_train_batch_size") and hasattr(args, "max_seq_length"):
+            tokens_per_step = args.per_device_train_batch_size * args.max_seq_length
+            if hasattr(args, "gradient_accumulation_steps"):
+                tokens_per_step *= args.gradient_accumulation_steps
+            if torch.distributed.is_initialized():
+                tokens_per_step *= torch.distributed.get_world_size()
+            
+            current_tokens = tokens_per_step
+            self.total_tokens += current_tokens
+            
+            # 计算token处理速度
+            if time_diff >= 1.0:  # 至少1秒
+                tokens_per_second = (self.total_tokens - self.last_tokens) / time_diff
+                log_str.append(f"速度: {tokens_per_second:.1f}tokens/s")
+                self.last_tokens = self.total_tokens
+                self.last_log_time = current_time
+        
         # 添加进度信息
-        if state.max_steps > 0:
-            progress = f"步骤: {state.global_step}/{state.max_steps} ({100*state.global_step/state.max_steps:.1f}%)"
-        else:
-            progress = f"步骤: {state.global_step}"
+        progress_str = f"步骤: {step}"
+        if hasattr(args, "max_steps") and args.max_steps > 0:
+            progress_str += f"/{args.max_steps} ({100*step/args.max_steps:.1f}%)"
+        
+        # 添加时间信息
+        hours, remainder = divmod(total_elapsed, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        time_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
         
         # 打印完整日志
-        logger.info(f"{progress} - {', '.join(log_str)}")
+        logger.info(f"[{time_str}] {progress_str} - 轮次: {epoch:.2f} - {', '.join(log_str)}")
         
-        # 简单上报到wandb
+        # 上报到wandb
         if self.use_wandb and wandb.run is not None:
             # 只记录数值型指标
             wandb_logs = {k: v for k, v in logs.items() if isinstance(v, (int, float))}
+            
+            # 添加额外信息到wandb
+            if current_tokens > 0:
+                wandb_logs["tokens_processed"] = self.total_tokens
+                if time_diff >= 1.0:
+                    wandb_logs["tokens_per_second"] = (self.total_tokens - self.last_tokens) / time_diff
+            
+            # 添加进度百分比
+            if hasattr(args, "max_steps") and args.max_steps > 0:
+                wandb_logs["progress_percent"] = 100 * step / args.max_steps
+            
             # 记录到wandb
             wandb.log(wandb_logs)
 
@@ -456,9 +503,13 @@ def main():
     # 创建输出目录(只在主进程)
     if is_main_process:
         os.makedirs(args.output_dir, exist_ok=True)
+        # 添加训练时间标记
+        run_time_str = datetime.now().strftime('%Y%m%d-%H%M%S')
+        wandb_run_name = f"qwen-pretrain-{run_time_str}"
+        args.wandb_name = args.wandb_name or wandb_run_name
     
     # 初始化wandb(只在主进程)
-    if is_main_process:
+    if is_main_process and args.use_wandb:
         using_wandb = setup_wandb(args)
     
     # 检查检查点(所有进程都需要)
@@ -515,12 +566,12 @@ def main():
         num_train_epochs=args.num_train_epochs if args.num_train_epochs > 0 else None,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
-        fp16=False,  # 禁用混合精度
+        fp16=args.fp16,  # 使用命令行参数
         save_total_limit=3,
         remove_unused_columns=False,
         dataloader_num_workers=4,
         report_to=["wandb"] if args.use_wandb and is_main_process else [],
-        run_name=f"qwen-pretrain-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        run_name=args.wandb_name,
         # 分布式训练参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,

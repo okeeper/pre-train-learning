@@ -22,6 +22,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --max_seq_length 1024 \
   --num_train_epochs 0.5 \
   --learning_rate 1e-5 \
+  --logging_steps 1 \
   --use_wandb
 
 # 第三阶段：使用长文本微调
