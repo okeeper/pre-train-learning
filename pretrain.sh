@@ -7,7 +7,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --per_device_train_batch_size 8 \
   --gradient_accumulation_steps 4 \
   --max_seq_length 512 \
-  --num_train_epochs 0.7 \
+  --num_train_epochs 2 \
   --learning_rate 1e-5 \
   --use_wandb
 

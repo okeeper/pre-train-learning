@@ -403,89 +403,6 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print(separator)
     print("\n")
 
-class SimpleLoggingCallback(TrainerCallback):
-    def __init__(self, is_main_process=True, use_wandb=False):
-        self.is_main_process = is_main_process
-        self.use_wandb = use_wandb
-        self.start_time = time.time()
-        self.last_log_time = self.start_time
-        self.total_tokens = 0
-        self.last_tokens = 0
-    
-    def on_log(self, args, state, control, logs=None, **kwargs):
-        # 只在主进程上报
-        if not self.is_main_process or logs is None:
-            return
-        
-        # 获取当前时间
-        current_time = time.time()
-        time_diff = current_time - self.last_log_time
-        total_elapsed = current_time - self.start_time
-        
-        # 构建基本日志信息
-        log_str = []
-        for k, v in sorted(logs.items()):
-            if isinstance(v, float):
-                log_str.append(f"{k}: {v:.4f}")
-            else:
-                log_str.append(f"{k}: {v}")
-        
-        # 处理进度信息
-        step = logs.get("step", 0)
-        epoch = logs.get("epoch", 0)
-        
-        # 更新token计数
-        current_tokens = 0
-        if "loss" in logs and hasattr(args, "per_device_train_batch_size") and hasattr(args, "max_seq_length"):
-            tokens_per_step = args.per_device_train_batch_size * args.max_seq_length
-            if hasattr(args, "gradient_accumulation_steps"):
-                tokens_per_step *= args.gradient_accumulation_steps
-            if torch.distributed.is_initialized():
-                tokens_per_step *= torch.distributed.get_world_size()
-            
-            current_tokens = tokens_per_step
-            self.total_tokens += current_tokens
-            
-            # 计算token处理速度
-            if time_diff >= 1.0:  # 至少1秒
-                tokens_per_second = (self.total_tokens - self.last_tokens) / time_diff
-                log_str.append(f"速度: {tokens_per_second:.1f}tokens/s")
-                self.last_tokens = self.total_tokens
-                self.last_log_time = current_time
-        
-        # 添加进度信息
-        progress_str = f"步骤: {step}"
-        if hasattr(args, "max_steps") and args.max_steps > 0:
-            progress_str += f"/{args.max_steps} ({100*step/args.max_steps:.1f}%)"
-        
-        # 添加时间信息
-        hours, remainder = divmod(total_elapsed, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        time_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
-        
-        # 打印完整日志
-        logger.info(f"[{time_str}] {progress_str} - 轮次: {epoch:.2f} - {', '.join(log_str)}")
-        
-        # 上报到wandb
-        if self.use_wandb and wandb.run is not None:
-            # 只记录数值型指标
-            wandb_logs = {k: v for k, v in logs.items() if isinstance(v, (int, float))}
-            
-            # 添加额外信息到wandb
-            if current_tokens > 0:
-                wandb_logs["tokens_processed"] = self.total_tokens
-                if time_diff >= 1.0:
-                    wandb_logs["tokens_per_second"] = (self.total_tokens - self.last_tokens) / time_diff
-            
-            # 添加进度百分比
-            if hasattr(args, "max_steps") and args.max_steps > 0:
-                wandb_logs["progress_percent"] = 100 * step / args.max_steps
-            
-            # 记录到wandb
-            wandb.log(wandb_logs)
-        
-        return control
-
 def main():
     args = parse_args()
     set_seed(args.seed)
@@ -590,11 +507,13 @@ def main():
         # 分布式训练参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
-        disable_tqdm=True,  # 禁用tqdm进度条
-        # 设置较长的logging_nan_inf_filter，避免一些NaN过滤问题
-        logging_nan_inf_filter=False,
-        # 确保training_loop正确
+        # 禁用tqdm进度条，使用简单日志
+        disable_tqdm=is_distributed,  # 分布式时禁用tqdm
+        # 日志设置
         logging_first_step=True,
+        logging_nan_inf_filter=False,
+        # 确保正确显示loss
+        label_smoothing_factor=0.0,
     )
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
@@ -605,13 +524,12 @@ def main():
         mlm=False,
     )
     
-    # 初始化Trainer
+    # 初始化Trainer - 移除了自定义回调
     trainer = Trainer(
         model=model,
         args=training_args,
         data_collator=data_collator,
         train_dataset=train_dataset,
-        callbacks=[SimpleLoggingCallback(is_main_process=is_main_process, use_wandb=args.use_wandb)]  # 添加自定义回调
     )
     
     # 监控模型(仅主进程)
