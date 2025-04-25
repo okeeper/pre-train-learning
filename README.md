@@ -99,10 +99,41 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
 
 ## chat
 ```
+
+python test_chat.py --model_path output/output/qwen_novel_pretrain_long \
+--max_new_tokens 512 --temperature 0.7
+
 python test_chat.py --model_path output/qwen_novel_pretrain_short \
 --max_new_tokens 512 --temperature 0.7
+
+python test_chat.py --model_path output/qwen_novel_pretrain_knowledge \
+--max_new_tokens 512 --temperature 0.7
+
+
+# 原模型
+python test_chat.py --model_path Qwen/Qwen2.5-1.5B-Instruct \
+--max_new_tokens 512 --temperature 0.7
+
+
 
 
 # 使用LoRA
 python test_chat.py --model_path /path/to/your/model --lora_path /path/to/your/lora
+```
+
+
+# 评估
+```
+# c3,squad_v2,
+python model_evaluation.py \
+    --model_path ./output \
+    --perplexity_dataset data/xd_eval_preplexity.txt \
+    --qa_dataset ./data/xd_eval_qa.json \
+    --classification_dataset ./data/xd_eval_classification.json \
+    --output_dir ./output/evaluation_results \
+    --tasks perplexity,qa,classification \
+    --num_samples 100 \
+    --batch_size 16 \
+    --fp16 \
+    --use_wandb
 ```

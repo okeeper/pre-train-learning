@@ -65,6 +65,19 @@ python pretrain_qwen_novel.py \
   --logging_steps 5 \
   --use_wandb
 
+python pretrain_qwen_novel.py \
+  --model_name_or_path output/qwen_novel_pretrain_short \
+  --output_dir output/qwen_novel_pretrain_knowledge \
+  --wandb_name qwen_novel_pretrain_knowledge \
+  --file_pattern "xd_knowledge_graph.json" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 2 \
+  --max_seq_length 2048 \
+  --num_train_epochs 1 \
+  --learning_rate 1e-5 \
+  --logging_steps 5 \
+  --use_wandb
+
 # 任务图谱
 python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --model_name_or_path output/qwen_novel_pretrain_stage2 \
