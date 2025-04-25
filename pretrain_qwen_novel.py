@@ -410,11 +410,15 @@ def main():
     # 检查是否在分布式环境中
     is_distributed = args.local_rank != -1
     if is_distributed:
+        # 先设置GPU设备，再初始化分布式环境
+        if torch.cuda.is_available():
+            torch.cuda.set_device(args.local_rank)
+            
         # 仅初始化一次分布式环境
         if not torch.distributed.is_initialized():
             torch.distributed.init_process_group(backend="nccl")
-        torch.cuda.set_device(args.local_rank)
-        logger.info(f"使用分布式训练，rank={args.local_rank}")
+            
+        logger.info(f"使用分布式训练，rank={args.local_rank}，设备={torch.cuda.current_device()}")
     
     # 定义主进程变量，用于替代重复的条件判断
     is_main_process = not is_distributed or args.local_rank == 0
@@ -523,9 +527,12 @@ def main():
     # 开始训练
     logger.info("开始训练...")
     
-    # 强制同步所有进程
+    # 强制同步所有进程时指定设备
     if is_distributed:
-        torch.distributed.barrier()
+        # 获取当前设备ID
+        device_id = torch.cuda.current_device()
+        # 明确指定设备进行barrier操作
+        torch.distributed.barrier(device_ids=[device_id])
     
     train_result = trainer.train()
     
@@ -553,8 +560,9 @@ def main():
             logger.info("记录训练指标到wandb，不上传模型")
             wandb.finish()
     
-    # 添加这行，确保分布式环境正确关闭
-    if is_distributed:
+    # 训练结束后
+    # 确保分布式环境正确关闭
+    if is_distributed and torch.distributed.is_initialized():
         torch.distributed.destroy_process_group()
     
     logger.info("预训练完成!")
