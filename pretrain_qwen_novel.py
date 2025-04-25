@@ -412,7 +412,7 @@ class SimpleLoggingCallback(TrainerCallback):
         self.total_tokens = 0
         self.last_tokens = 0
     
-    def on_log(self, args, control, logs=None, **kwargs):
+    def on_log(self, args, state, control, logs=None, **kwargs):
         # 只在主进程上报
         if not self.is_main_process or logs is None:
             return
@@ -483,6 +483,8 @@ class SimpleLoggingCallback(TrainerCallback):
             
             # 记录到wandb
             wandb.log(wandb_logs)
+        
+        return control
 
 def main():
     args = parse_args()

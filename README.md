@@ -76,6 +76,7 @@ conda remove --name novel_qa --all
 
 ```
 conda activate llama-factory
+conda activate zye
 ```
 
 

@@ -3,12 +3,12 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --model_name_or_path Qwen/Qwen2.5-1.5B-Instruct \
   --output_dir output/qwen_novel_pretrain_stage1 \
   --wandb_name qwen_novel_pretrain_stage1 \
-  --file_pattern "xd_chunks_32.json,xd_chunks_128.json" \
+  --file_pattern "xd_chunks_64.json,xd_chunks_512.json,xd_knowledge_graph.json" \
   --per_device_train_batch_size 8 \
   --gradient_accumulation_steps 4 \
-  --max_seq_length 128 \
-  --num_train_epochs 0.5 \
-  --learning_rate 1e-6 \
+  --max_seq_length 512 \
+  --num_train_epochs 0.7 \
+  --learning_rate 1e-5 \
   --use_wandb
 
 # 第二阶段：使用中等长度文本继续训练
