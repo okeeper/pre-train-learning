@@ -25,6 +25,7 @@ from transformers.trainer_callback import TrainerCallback
 import time
 import sys
 from torch.distributed import gather_object
+import signal
 
 # 强制刷新所有标准输出
 os.environ["PYTHONUNBUFFERED"] = "1"
@@ -216,32 +217,35 @@ class NovelChunksDataset(Dataset):
                 logger.error(f"处理文件{json_file}时出错: {str(e)}")
         
         logger.info(f"总共加载了{len(self.examples)}个文本片段")
+        
+        # 增加预处理优化
+        self.tokenized_examples = []
+        for text in self.examples:
+            # 预先处理所有数据，避免训练时的瓶颈
+            encodings = self.tokenizer(
+                text,
+                truncation=True,
+                max_length=max_seq_length,
+                padding="max_length",
+                return_tensors="pt",
+            )
+            
+            item = {
+                "input_ids": encodings["input_ids"].squeeze(0),
+                "attention_mask": encodings["attention_mask"].squeeze(0),
+            }
+            
+            item["labels"] = item["input_ids"].clone()
+            self.tokenized_examples.append(item)
+        
+        logger.info(f"预处理完成，共有 {len(self.tokenized_examples)} 个样本")
 
     def __len__(self):
-        return len(self.examples)
+        return len(self.tokenized_examples)
 
     def __getitem__(self, idx):
-        text = self.examples[idx]
-        
-        # 对文本进行编码
-        encodings = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_seq_length,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        
-        # 需要将张量从形状[1, seq_len]转换为[seq_len]
-        item = {
-            "input_ids": encodings["input_ids"].squeeze(0),
-            "attention_mask": encodings["attention_mask"].squeeze(0),
-        }
-        
-        # 为语言模型训练设置标签
-        item["labels"] = item["input_ids"].clone()
-        
-        return item
+        # 直接返回预处理好的数据
+        return self.tokenized_examples[idx]
 
 
 def setup_wandb(args):
@@ -496,6 +500,9 @@ class ProgressCallback(TrainerCallback):
         return control
 
 def main():
+    # 忽略 SIGHUP 信号
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    
     args = parse_args()
     set_seed(args.seed)
     

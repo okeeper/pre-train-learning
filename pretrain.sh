@@ -39,14 +39,14 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
 
 # 第三阶段：使用长文本微调
 python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
-  --model_name_or_path output/qwen_novel_pretrain_stage2 \
-  --output_dir output/qwen_novel_pretrain_final \
-  --wandb_name qwen_novel_pretrain_final \
+  --model_name_or_path Qwen/Qwen2.5-1.5B-Instruct \
+  --output_dir output/qwen_novel_pretrain_long \
+  --wandb_name qwen_novel_pretrain_long \
   --file_pattern "xd_chunks_4096.json" \
   --per_device_train_batch_size 2 \
   --gradient_accumulation_steps 4 \
   --max_seq_length 4096 \
-  --num_train_epochs 0.7 \
+  --num_train_epochs 1 \
   --learning_rate 1e-5 \
   --use_wandb
 
