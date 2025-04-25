@@ -170,7 +170,6 @@ def parse_args():
         default=-1,
         help=argparse.SUPPRESS,  # 在帮助信息中隐藏这个重复参数
     )
-    args = parser.parse_args()
     return args
 
 # 自定义数据集类，用于加载多个JSON文件
@@ -579,8 +578,7 @@ def main():
     # 仅在主进程打印训练配置
     if is_main_process:
         print_training_config(args, model_config, train_dataset, effective_batch_size)
-    
-    # 配置训练参数
+
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True,
@@ -596,13 +594,14 @@ def main():
         save_total_limit=3,
         remove_unused_columns=False,
         dataloader_num_workers=4,
+        dataloader_pin_memory=True,  # 启用内存锁定提高性能
         report_to=["wandb"] if args.use_wandb and is_main_process else [],
         run_name=args.wandb_name,
         # 分布式训练参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
         # 只在非主进程禁用tqdm not is_main_process
-        disable_tqdm=True,
+        disable_tqdm=not is_main_process,
         # 日志设置
         logging_first_step=True,
         logging_nan_inf_filter=False,

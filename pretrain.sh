@@ -56,7 +56,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --output_dir output/qwen_novel_pretrain_short \
   --wandb_name qwen_novel_pretrain_short \
   --file_pattern "xd_chunks_128.json" \
-  --per_device_train_batch_size 8 \
+  --per_device_train_batch_size 16 \
   --gradient_accumulation_steps 8 \
   --max_seq_length 128 \
   --num_train_epochs 1 \
