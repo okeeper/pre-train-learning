@@ -527,7 +527,7 @@ def main():
     if is_distributed:
         torch.distributed.barrier()
     
-    train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
+    train_result = trainer.train()
     
     # 输出训练结果
     if is_main_process:
