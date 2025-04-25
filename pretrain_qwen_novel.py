@@ -170,6 +170,7 @@ def parse_args():
         default=-1,
         help=argparse.SUPPRESS,  # 在帮助信息中隐藏这个重复参数
     )
+    args = parser.parse_args()
     return args
 
 # 自定义数据集类，用于加载多个JSON文件
