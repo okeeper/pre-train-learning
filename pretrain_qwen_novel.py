@@ -520,8 +520,19 @@ def main():
         last_checkpoint = get_last_checkpoint(args.output_dir)
         if last_checkpoint is not None and is_main_process:
             logger.info(f"找到检查点: {last_checkpoint}")
+            # 读取trainer_state.json确保参数一致性
+            try:
+                with open(os.path.join(last_checkpoint, "trainer_state.json"), "r") as f:
+                    trainer_state = json.load(f)
+                    # 将checkpoint中的logging_steps同步到当前运行
+                    if "logging_steps" in trainer_state:
+                        logger.info(f"同步checkpoint的logging_steps: {trainer_state['logging_steps']}")
+                        args.logging_steps = trainer_state["logging_steps"]
+            except Exception as e:
+                logger.warning(f"读取checkpoint状态时出错: {e}")
     
     # 加载模型配置和分词器
+    logger.info(f"加载模型配置: {args.model_name_or_path}")
     model_config = AutoConfig.from_pretrained(args.model_name_or_path)
     if args.gradient_checkpointing:
         model_config.use_cache = False
@@ -531,6 +542,7 @@ def main():
     tokenizer.padding_side = "right"
     
     # 加载模型
+    logger.info(f"加载预训练模型: {args.model_name_or_path}")
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path, 
         config=model_config
@@ -540,6 +552,7 @@ def main():
         model.gradient_checkpointing_enable()
     
     # 加载数据集(所有进程需要自己的副本)
+    logger.info(f"加载训练数据: {args.data_dir}")
     train_dataset = NovelChunksDataset(
         data_dir=args.data_dir,
         tokenizer=tokenizer,
@@ -559,7 +572,7 @@ def main():
     # 配置训练参数
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        overwrite_output_dir=True if last_checkpoint is None else False,
+        overwrite_output_dir=True if last_checkpoint is None else False,  # 保留checkpoint
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
@@ -568,7 +581,7 @@ def main():
         num_train_epochs=args.num_train_epochs if args.num_train_epochs > 0 else None,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
-        fp16=args.fp16,  # 使用命令行参数
+        fp16=args.fp16,
         save_total_limit=3,
         remove_unused_columns=False,
         dataloader_num_workers=4,
@@ -578,7 +591,13 @@ def main():
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
         disable_tqdm=True,  # 禁用tqdm进度条
+        # 设置较长的logging_nan_inf_filter，避免一些NaN过滤问题
+        logging_nan_inf_filter=False,
+        # 确保training_loop正确
+        logging_first_step=True,
     )
+    
+    logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
     
     # 数据整理器
     data_collator = DataCollatorForLanguageModeling(
@@ -600,8 +619,19 @@ def main():
         wandb.watch(model, log=args.wandb_watch, log_freq=args.logging_steps)
     
     # 开始训练
-    logger.info("开始训练")
-    trainer.train(resume_from_checkpoint=last_checkpoint)
+    logger.info("开始训练...")
+    
+    # 强制同步所有进程
+    if is_distributed:
+        torch.distributed.barrier()
+    
+    train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
+    
+    # 输出训练结果
+    if is_main_process:
+        logger.info(f"训练结果: {train_result}")
+        metrics = train_result.metrics
+        logger.info(f"训练指标: {metrics}")
     
     # 保存模型(仅主进程)
     if is_main_process:
@@ -609,11 +639,21 @@ def main():
         trainer.save_model(args.output_dir)
         tokenizer.save_pretrained(args.output_dir)
         
+        # 保存训练参数
+        if training_args.local_rank == 0:
+            with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
+                import json
+                json.dump(vars(args), f, indent=4)
+        
         # wandb记录(仅主进程)
         if args.use_wandb:
             # 不上传模型，只记录训练完成
             logger.info("记录训练指标到wandb，不上传模型")
             wandb.finish()
+    
+    # 添加这行，确保分布式环境正确关闭
+    if is_distributed:
+        torch.distributed.destroy_process_group()
     
     logger.info("预训练完成!")
 
