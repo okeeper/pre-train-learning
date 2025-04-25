@@ -602,7 +602,7 @@ def main():
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
         # 只在非主进程禁用tqdm not is_main_process
-        #disable_tqdm=True,
+        disable_tqdm=True,
         # 日志设置
         logging_first_step=True,
         logging_nan_inf_filter=False,
