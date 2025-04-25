@@ -4,6 +4,7 @@ import argparse
 from peft import PeftModel
 import os
 from collections import deque
+import inspect
 
 def load_model_and_tokenizer(model_path, lora_path=None):
     """加载模型和分词器，可选加载LoRA权重"""
@@ -23,30 +24,107 @@ def load_model_and_tokenizer(model_path, lora_path=None):
     
     return model, tokenizer
 
-def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=1024, temperature=0.7):
-    """生成回复，可包含历史对话"""
-
-    full_prompt = "你是一个专业的小说阅读专家，擅长根据小说故事内容回答用户的问题。\n\n"
-    for h_user, h_assistant in history:
-        if h_user:
-            full_prompt += f"用户：{h_user}\n"
+def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=1024, temperature=0.7, system_prompt=None):
+    """生成回复，使用Qwen格式的对话模板
+    
+    参数:
+    - model: 已加载的模型
+    - tokenizer: 对应的分词器
+    - prompt: 用户当前的输入
+    - history: 对话历史列表，格式为[(user_message, assistant_message), ...]
+    - max_new_tokens: 最大生成的新token数量
+    - temperature: 生成温度，控制随机性
+    - system_prompt: 自定义系统提示，如果为None则使用默认系统提示
+    
+    返回:
+    - 模型生成的回复文本
+    """
+    try:
+        if history is None:
+            history = []
+        
+        # 默认系统提示词，如果用户想要小说阅读专家，可以修改这里
+        if system_prompt is None:
+            system_prompt = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant specialized in novel reading and literary analysis."
+        
+        # 构建完整prompt
+        full_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+        
+        # 添加历史对话
+        for h_user, h_assistant in history:
+            if h_user is not None:
+                full_prompt += f"<|im_start|>user\n{h_user}<|im_end|>\n"
+            if h_assistant is not None:
+                full_prompt += f"<|im_start|>assistant\n{h_assistant}<|im_end|>\n"
+        
+        # 添加当前用户输入
+        full_prompt += f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+        
+        # 生成回复
+        inputs = tokenizer(full_prompt, return_tensors="pt")
+        # 确保输入数据被发送到正确的设备
+        for k, v in inputs.items():
+            inputs[k] = v.to(model.device)
+        
+        # 设置生成参数
+        gen_kwargs = {
+            "max_new_tokens": max_new_tokens,
+            "temperature": temperature,
+            "do_sample": temperature > 0,
+            "top_p": 0.7,
+            "pad_token_id": tokenizer.pad_token_id,
+        }
+        
+        # 检查模型API是否支持stop_words参数
+        generate_signature = inspect.signature(model.generate)
+        if "stopping_criteria" in generate_signature.parameters:
+            from transformers import StoppingCriteriaList, StoppingCriteria
+            
+            # 自定义停止标准
+            class StopOnTokens(StoppingCriteria):
+                def __init__(self, stop_token_ids):
+                    self.stop_token_ids = stop_token_ids
+                
+                def __call__(self, input_ids, scores, **kwargs):
+                    for stop_id in self.stop_token_ids:
+                        if input_ids[0][-1] == stop_id:
+                            return True
+                    return False
+            
+            # 获取终止词的token IDs
+            stop_words_ids = tokenizer.encode("<|im_end|>", add_special_tokens=False)
+            stopping_criteria = StoppingCriteriaList([StopOnTokens(stop_words_ids)])
+            gen_kwargs["stopping_criteria"] = stopping_criteria
+        
+        # 生成回复
+        with torch.no_grad():
+            outputs = model.generate(**inputs, **gen_kwargs)
+        
+        # 解码输出
+        full_response = tokenizer.decode(outputs[0], skip_special_tokens=False)
+        
+        # 提取助手的回复部分
+        assistant_start = "<|im_start|>assistant\n"
+        assistant_end = "<|im_end|>"
+        
+        # 查找最后一个助手部分
+        last_assistant_start = full_response.rfind(assistant_start)
+        if last_assistant_start != -1:
+            response_start = last_assistant_start + len(assistant_start)
+            response_end = full_response.find(assistant_end, response_start)
+            if response_end != -1:
+                response = full_response[response_start:response_end].strip()
+            else:
+                # 如果没有找到结束标记，就取所有剩余文本
+                response = full_response[response_start:].strip()
         else:
-            full_prompt += f"助手：{h_assistant}\n\n"
-    
-    full_prompt = full_prompt + "用户：" + prompt + "\n助手："
-    inputs = tokenizer(full_prompt, return_tensors="pt").to(model.device)
-    
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=max_new_tokens,
-        temperature=temperature,
-        num_return_sequences=1,
-        do_sample=True,
-        pad_token_id=tokenizer.pad_token_id
-    )
-    
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return response
+            # 回退到简单解码
+            response = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        
+        return response
+    except Exception as e:
+        print(f"生成回复时发生错误: {str(e)}")
+        return "抱歉，生成回复时发生错误。"
 
 def main():
     # 设置命令行参数
