@@ -100,7 +100,7 @@ def parse_args():
     parser.add_argument(
         "--logging_steps",
         type=int,
-        default=5,
+        default=10,
         help="日志记录步数",
     )
     parser.add_argument(
@@ -431,22 +431,6 @@ def main():
     if is_main_process and args.use_wandb:
         using_wandb = setup_wandb(args)
     
-    # 检查检查点(所有进程都需要)
-    last_checkpoint = None
-    if os.path.isdir(args.output_dir):
-        last_checkpoint = get_last_checkpoint(args.output_dir)
-        if last_checkpoint is not None and is_main_process:
-            logger.info(f"找到检查点: {last_checkpoint}")
-            # 读取trainer_state.json确保参数一致性
-            try:
-                with open(os.path.join(last_checkpoint, "trainer_state.json"), "r") as f:
-                    trainer_state = json.load(f)
-                    # 将checkpoint中的logging_steps同步到当前运行
-                    if "logging_steps" in trainer_state:
-                        logger.info(f"同步checkpoint的logging_steps: {trainer_state['logging_steps']}")
-                        args.logging_steps = trainer_state["logging_steps"]
-            except Exception as e:
-                logger.warning(f"读取checkpoint状态时出错: {e}")
     
     # 加载模型配置和分词器
     logger.info(f"加载模型配置: {args.model_name_or_path}")
@@ -489,7 +473,7 @@ def main():
     # 配置训练参数
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        overwrite_output_dir=True if last_checkpoint is None else False,  # 保留checkpoint
+        overwrite_output_dir=True,
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
