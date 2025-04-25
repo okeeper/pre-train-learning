@@ -157,7 +157,7 @@ def parse_args():
     parser.add_argument(
         "--wandb_watch",
         type=str,
-        default="gradients",
+        default="parameters",
         choices=["all", "gradients", "parameters", "False"],
         help="wandb的watch级别 (default: gradients)",
     )
