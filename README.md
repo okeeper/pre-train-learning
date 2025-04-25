@@ -131,7 +131,7 @@ python model_evaluation.py \
     --qa_dataset ./data/xd_eval_qa.json \
     --classification_dataset ./data/xd_eval_classification.json \
     --output_dir ./output/evaluation_results \
-    --tasks perplexity,qa,classification \
+    --tasks perplexity,qa,classification,generation \
     --num_samples 100 \
     --batch_size 16 \
     --fp16 \

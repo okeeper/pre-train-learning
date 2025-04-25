@@ -8,12 +8,13 @@ from tqdm import tqdm
 import wandb
 import math
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datasets import load_dataset, Dataset, concatenate_datasets
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    TextGenerationPipeline,
+    StoppingCriteriaList, 
+    StoppingCriteria
 )
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from rouge import Rouge
@@ -21,6 +22,7 @@ import pandas as pd
 import seaborn as sns
 from collections import defaultdict
 import glob
+import inspect
 
 # 设置日志
 logging.basicConfig(
@@ -141,6 +143,87 @@ def parse_args():
     
     args = parser.parse_args()
     return args
+
+# 提取公共方法：使用Qwen模式生成文本
+def generate_with_qwen_format(model, tokenizer, prompt, system_prompt, max_new_tokens, temperature=0.7, do_sample=True, top_p=0.7):
+    """使用Qwen对话格式生成文本
+    
+    Args:
+        model: 模型
+        tokenizer: 分词器
+        prompt: 用户提示
+        system_prompt: 系统提示
+        max_new_tokens: 最大生成token数
+        temperature: 温度
+        do_sample: 是否使用采样
+        top_p: top-p采样参数
+        
+    Returns:
+        生成的文本
+    """
+    # 构建Qwen格式输入
+    full_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+    full_prompt += f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+    
+    # 处理输入
+    inputs = tokenizer(full_prompt, return_tensors="pt")
+    for k, v in inputs.items():
+        inputs[k] = v.to(model.device)
+    
+    # 设置生成参数
+    gen_kwargs = {
+        "max_new_tokens": max_new_tokens,
+        "temperature": temperature,
+        "do_sample": do_sample,
+        "top_p": top_p,
+        "pad_token_id": tokenizer.pad_token_id,
+    }
+    
+    # 添加停止标准
+    generate_signature = inspect.signature(model.generate)
+    if "stopping_criteria" in generate_signature.parameters:
+        # 自定义停止标准
+        class StopOnTokens(StoppingCriteria):
+            def __init__(self, stop_token_ids):
+                self.stop_token_ids = stop_token_ids
+            
+            def __call__(self, input_ids, scores, **kwargs):
+                for stop_id in self.stop_token_ids:
+                    if input_ids[0][-1] == stop_id:
+                        return True
+                return False
+        
+        # 获取终止词的token IDs
+        stop_words_ids = tokenizer.encode("<|im_end|>", add_special_tokens=False)
+        stopping_criteria = StoppingCriteriaList([StopOnTokens(stop_words_ids)])
+        gen_kwargs["stopping_criteria"] = stopping_criteria
+    
+    # 生成回复
+    with torch.no_grad():
+        outputs = model.generate(**inputs, **gen_kwargs)
+    
+    # 解码输出
+    full_response = tokenizer.decode(outputs[0], skip_special_tokens=False)
+    
+    # 提取助手的回复部分
+    assistant_start = "<|im_start|>assistant\n"
+    assistant_end = "<|im_end|>"
+    
+    # 查找最后一个助手部分
+    last_assistant_start = full_response.rfind(assistant_start)
+    if last_assistant_start != -1:
+        response_start = last_assistant_start + len(assistant_start)
+        response_end = full_response.find(assistant_end, response_start)
+        if response_end != -1:
+            generated_text = full_response[response_start:response_end].strip()
+        else:
+            # 如果没有找到结束标记，就取所有剩余文本
+            generated_text = full_response[response_start:].strip()
+    else:
+        # 回退到简单解码
+        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+    
+    return generated_text
 
 # 加载多个数据集并合并
 def load_multiple_datasets(dataset_paths_or_names, dataset_split, task_type):
@@ -522,37 +605,24 @@ def calculate_perplexity(model, tokenizer, eval_dataset, device, args):
     
     return perplexity_stats
 
-# 评估生成能力
+# 重构评估生成能力函数
 def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accelerate=False):
+    """评估生成能力"""
     logger.info("评估生成能力...")
-    
-    # 根据是否使用accelerate决定如何创建pipeline
-    if use_accelerate:
-        pipeline = TextGenerationPipeline(
-            model=model, 
-            tokenizer=tokenizer,
-        )
-    else:
-        pipeline = TextGenerationPipeline(
-            model=model, 
-            tokenizer=tokenizer,
-        )
-    
     results = []
+    
     for prompt in tqdm(eval_prompts, desc="生成文本"):
         try:
-            outputs = pipeline(
-                prompt,
-                max_length=args.max_length,
-                num_return_sequences=1,
-                do_sample=True,
+            # 使用公共生成方法
+            system_prompt = "你是一个专业的文本生成助手，请根据提供的上下文生成符合要求的文本。"
+            generated_text = generate_with_qwen_format(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                max_new_tokens=args.max_length,
                 temperature=args.temperature
             )
-            
-            generated_text = outputs[0]["generated_text"]
-            # 去除提示部分，只保留生成的内容
-            if generated_text.startswith(prompt):
-                generated_text = generated_text[len(prompt):].strip()
                 
             results.append({
                 "prompt": prompt,
@@ -586,88 +656,37 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
     
     return generation_stats
 
-# 评估问答能力
+# 重构评估问答能力函数
 def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
+    """评估问答能力"""
     logger.info("评估问答能力...")
     model.eval()
-    results = []
     
-    # 修改这部分代码，不再指定device参数
-    pipeline = TextGenerationPipeline(
-        model=model, 
-        tokenizer=tokenizer,
-    )
+    # 提取问题和答案
+    questions, answers = extract_qa_data(qa_dataset, args.num_samples)
     
-    # 确保qa_dataset有正确的格式
-    questions = []
-    answers = []
-    
-    if isinstance(qa_dataset, Dataset):
-        # 尝试不同的列名格式
-        if "question" in qa_dataset.column_names and "answer" in qa_dataset.column_names:
-            questions = qa_dataset["question"]
-            answers = qa_dataset["answer"]
-        elif "question" in qa_dataset.column_names and "answers" in qa_dataset.column_names:
-            questions = qa_dataset["question"]
-            # 如果answers是列表，取第一个答案
-            answers = [a[0] if isinstance(a, list) else a for a in qa_dataset["answers"]]
-        else:
-            logger.warning("未找到标准问答列名，尝试使用上下文进行问答评估")
-            if "context" in qa_dataset.column_names and "question" in qa_dataset.column_names:
-                questions = [f"上下文: {c}\n问题: {q}" for c, q in zip(qa_dataset["context"], qa_dataset["question"])]
-                # 尝试不同格式的答案
-                if "answers" in qa_dataset.column_names:
-                    answers = [a["text"][0] if isinstance(a, dict) and "text" in a else a for a in qa_dataset["answers"]]
-                elif "answer" in qa_dataset.column_names:
-                    answers = qa_dataset["answer"]
-                else:
-                    logger.error("未找到答案列")
-                    return {"error": "未找到答案列"}
-            else:
-                logger.error("数据集格式不兼容问答任务")
-                return {"error": "数据集格式不兼容问答任务"}
-    else:
-        # 如果不是Dataset对象，则假设是包含问题和答案的字典列表
-        if isinstance(qa_dataset, list) and len(qa_dataset) > 0:
-            if "question" in qa_dataset[0] and "answer" in qa_dataset[0]:
-                questions = [item["question"] for item in qa_dataset]
-                answers = [item["answer"] for item in qa_dataset]
-            else:
-                logger.error("数据集格式不兼容问答任务")
-                return {"error": "数据集格式不兼容问答任务"}
-        else:
-            logger.error("无效的问答数据集")
-            return {"error": "无效的问答数据集"}
-    
-    # 限制样本数量
-    if args.num_samples > 0 and args.num_samples < len(questions):
-        questions = questions[:args.num_samples]
-        answers = answers[:args.num_samples]
+    if not questions:
+        logger.error("无法从数据集中提取问答对")
+        return {"error": "无法从数据集中提取问答对"}
     
     # 评估问答
     rouge = Rouge()
     exact_matches = 0
     rouges = []
+    results = []
     
     for question, expected_answer in tqdm(zip(questions, answers), desc="问答评估", total=len(questions)):
         try:
-            # 添加提示以获得更好的QA结果
-            prompt = f"问题: {question}\n回答: "
-            
-            outputs = pipeline(
-                prompt,
-                max_length=args.max_length,
-                num_return_sequences=1,
-                do_sample=True,
-                temperature=0.3  # 降低温度以获得更确定的答案
+            # 使用公共生成方法
+            system_prompt = "你是小说的阅读专家，请根据小说内容回答,无需回复与提问无关的内容和解释。"
+            generated_answer = generate_with_qwen_format(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=question,
+                system_prompt=system_prompt,
+                max_new_tokens=args.max_length,
+                temperature=0.3  # 问答使用低温度
             )
-            
-            generated_text = outputs[0]["generated_text"]
-            # 提取生成的答案部分
-            if "回答: " in generated_text:
-                generated_answer = generated_text.split("回答: ", 1)[1].strip()
-            else:
-                generated_answer = generated_text[len(prompt):].strip()
             
             # 计算指标
             exact_match = 1 if generated_answer.strip() == expected_answer.strip() else 0
@@ -703,8 +722,46 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                 "error": str(e)
             })
     
+    # 计算和聚合指标
+    qa_stats = aggregate_qa_metrics(results, exact_matches, rouges, len(questions))
+    return qa_stats
+
+# 提取问答数据的辅助函数
+def extract_qa_data(qa_dataset, num_samples):
+    """从不同格式的数据集中提取问题和答案对"""
+    questions = []
+    answers = []
+    
+    if isinstance(qa_dataset, Dataset):
+        if "question" in qa_dataset.column_names and "answer" in qa_dataset.column_names:
+            questions = qa_dataset["question"]
+            answers = qa_dataset["answer"]
+        elif "question" in qa_dataset.column_names and "answers" in qa_dataset.column_names:
+            questions = qa_dataset["question"]
+            answers = [a[0] if isinstance(a, list) else a for a in qa_dataset["answers"]]
+        elif "context" in qa_dataset.column_names and "question" in qa_dataset.column_names:
+            questions = [f"上下文: {c}\n问题: {q}" for c, q in zip(qa_dataset["context"], qa_dataset["question"])]
+            if "answers" in qa_dataset.column_names:
+                answers = [a["text"][0] if isinstance(a, dict) and "text" in a else a for a in qa_dataset["answers"]]
+            elif "answer" in qa_dataset.column_names:
+                answers = qa_dataset["answer"]
+    elif isinstance(qa_dataset, list) and len(qa_dataset) > 0:
+        if "question" in qa_dataset[0] and "answer" in qa_dataset[0]:
+            questions = [item["question"] for item in qa_dataset]
+            answers = [item["answer"] for item in qa_dataset]
+    
+    # 限制样本数量
+    if num_samples > 0 and num_samples < len(questions):
+        questions = questions[:num_samples]
+        answers = answers[:num_samples]
+        
+    return questions, answers
+
+# 聚合问答指标的辅助函数
+def aggregate_qa_metrics(results, exact_matches, rouges, total_questions):
+    """聚合问答评估指标"""
     # 计算平均值
-    exact_match_acc = exact_matches / len(questions) if questions else 0
+    exact_match_acc = exact_matches / total_questions if total_questions else 0
     
     # 聚合ROUGE分数
     rouge_1_f = np.mean([r["rouge-1"]["f"] for r in rouges]) if rouges else 0
@@ -721,44 +778,18 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
     
     return qa_stats
 
-# 评估分类能力
+# 重构评估分类能力函数
 def evaluate_classification(model, tokenizer, classification_dataset, device, args, use_accelerate=False):
+    """评估分类能力"""
     logger.info("评估分类能力...")
     model.eval()
-    pipeline = TextGenerationPipeline(
-        model=model, 
-        tokenizer=tokenizer,
-    )
     
-    # 提取数据集
-    texts = []
-    labels = []
+    # 提取文本和标签
+    texts, labels = extract_classification_data(classification_dataset, args.num_samples)
     
-    if isinstance(classification_dataset, Dataset):
-        if "text" in classification_dataset.column_names and "label" in classification_dataset.column_names:
-            texts = classification_dataset["text"]
-            labels = classification_dataset["label"]
-        elif "sentence" in classification_dataset.column_names and "label" in classification_dataset.column_names:
-            texts = classification_dataset["sentence"]
-            labels = classification_dataset["label"]
-        else:
-            logger.error("分类数据集格式不兼容")
-            return {"error": "分类数据集格式不兼容"}
-    elif isinstance(classification_dataset, list) and len(classification_dataset) > 0:
-        if "text" in classification_dataset[0] and "label" in classification_dataset[0]:
-            texts = [item["text"] for item in classification_dataset]
-            labels = [item["label"] for item in classification_dataset]
-        else:
-            logger.error("分类数据集格式不兼容")
-            return {"error": "分类数据集格式不兼容"}
-    else:
-        logger.error("无效的分类数据集")
-        return {"error": "无效的分类数据集"}
-    
-    # 限制样本数量
-    if args.num_samples > 0 and args.num_samples < len(texts):
-        texts = texts[:args.num_samples]
-        labels = labels[:args.num_samples]
+    if not texts:
+        logger.error("无法从数据集中提取分类数据")
+        return {"error": "无法从数据集中提取分类数据"}
     
     # 获取所有可能的标签
     unique_labels = list(set(labels))
@@ -770,37 +801,27 @@ def evaluate_classification(model, tokenizer, classification_dataset, device, ar
     for text, true_label in tqdm(zip(texts, labels), desc="分类评估", total=len(texts)):
         try:
             # 构建分类提示
-            prompt = f"文本: {text}\n分类任务，请选择最合适的标签: {', '.join(unique_labels)}\n答案: "
+            prompt = f"请对以下文本进行分类，可选的类别有: {', '.join(unique_labels)}\n\n文本: {text}\n\n请直接回答类别名称，无需其他解释。"
+            system_prompt = "你是一个专业的文本分类助手，请根据提供的选项做出准确分类。"
             
-            outputs = pipeline(
-                prompt,
-                max_length=args.max_length,
-                num_return_sequences=1,
-                do_sample=False  # 分类任务不使用采样
+            # 使用公共生成方法
+            generated_label = generate_with_qwen_format(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                max_new_tokens=min(50, args.max_length),
+                temperature=0.1,  # 分类使用极低温度
+                do_sample=False   # 分类不使用采样
             )
             
-            generated_text = outputs[0]["generated_text"]
-            # 提取生成的答案部分
-            if "答案: " in generated_text:
-                generated_label = generated_text.split("答案: ", 1)[1].strip()
-            else:
-                generated_label = generated_text[len(prompt):].strip()
-            
             # 清理生成的标签
-            # 如果生成的标签不在预定义标签列表中，找出最相似的
             if generated_label not in unique_labels:
-                # 找出最相似的标签
-                for label in unique_labels:
-                    if label in generated_label:
-                        generated_label = label
-                        break
-                else:
-                    # 如果仍未找到匹配项，取第一个单词或整个短语
-                    generated_label = generated_label.split()[0] if generated_label else ""
+                generated_label = find_best_matching_label(generated_label, unique_labels)
             
             correct = 1 if str(generated_label).strip() == str(true_label).strip() else 0
-            
             predictions.append(generated_label)
+            
             results.append({
                 "text": text,
                 "true_label": true_label,
@@ -819,9 +840,51 @@ def evaluate_classification(model, tokenizer, classification_dataset, device, ar
             })
     
     # 计算分类指标
+    classification_stats = calculate_classification_metrics(results, predictions, labels, unique_labels)
+    return classification_stats
+
+# 提取分类数据的辅助函数
+def extract_classification_data(classification_dataset, num_samples):
+    """从不同格式的数据集中提取文本和标签对"""
+    texts = []
+    labels = []
+    
+    if isinstance(classification_dataset, Dataset):
+        if "text" in classification_dataset.column_names and "label" in classification_dataset.column_names:
+            texts = classification_dataset["text"]
+            labels = classification_dataset["label"]
+        elif "sentence" in classification_dataset.column_names and "label" in classification_dataset.column_names:
+            texts = classification_dataset["sentence"]
+            labels = classification_dataset["label"]
+    elif isinstance(classification_dataset, list) and len(classification_dataset) > 0:
+        if "text" in classification_dataset[0] and "label" in classification_dataset[0]:
+            texts = [item["text"] for item in classification_dataset]
+            labels = [item["label"] for item in classification_dataset]
+    
+    # 限制样本数量
+    if num_samples > 0 and num_samples < len(texts):
+        texts = texts[:num_samples]
+        labels = labels[:num_samples]
+        
+    return texts, labels
+
+# 找到最匹配的标签
+def find_best_matching_label(generated_label, unique_labels):
+    """找到生成标签最匹配的标准标签"""
+    # 检查是否包含完整标签
+    for label in unique_labels:
+        if label in generated_label:
+            return label
+    
+    # 如果没有完全匹配，取第一个单词或整个短语
+    return generated_label.split()[0] if generated_label else ""
+
+# 计算分类指标的辅助函数
+def calculate_classification_metrics(results, predictions, labels, unique_labels):
+    """计算分类评估指标"""
+    # 计算基本指标
     accuracy = accuracy_score(labels, predictions) if predictions else 0
     
-    # 尝试计算其他指标（如果数据是离散的）
     try:
         precision = precision_score(labels, predictions, average="weighted", zero_division=0)
         recall = recall_score(labels, predictions, average="weighted", zero_division=0)
@@ -849,7 +912,7 @@ def evaluate_classification(model, tokenizer, classification_dataset, device, ar
     
     return classification_stats
 
-# 创建量化评估结果的可视化（简化版）
+# 创建可视化结果
 def create_visualizations(evaluation_results, args):
     logger.info("创建简化版可视化图表...")
     
@@ -1028,80 +1091,84 @@ def main():
     # 创建输出目录
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # 设置设备
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-    logger.info(f"使用设备: {device}")
-    
-    # 加载模型和分词器
-    logger.info(f"加载模型: {args.model_path}")
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-        model_kwargs = {}
-        use_accelerate = False  # 添加标志跟踪是否使用accelerate
-        
-        if args.fp16:
-            model_kwargs["torch_dtype"] = torch.float16
-        
-        # 根据设备类型决定如何加载模型
-        if device.type == "cuda":
-            # 在CUDA环境中，使用自动设备映射
-            model = AutoModelForCausalLM.from_pretrained(
-                args.model_path,
-                device_map="auto",  # 使用accelerate自动管理设备
-                **model_kwargs
-            )
-            use_accelerate = True
-            logger.info("使用accelerate自动设备映射加载模型")
-        else:
-            # 在CPU环境中，直接加载模型到CPU
-            model = AutoModelForCausalLM.from_pretrained(
-                args.model_path,
-                **model_kwargs
-            )
-            model = model.to(device)
-            logger.info(f"模型已加载到 {device}")
-    except Exception as e:
-        logger.error(f"加载模型时出错: {str(e)}")
+    # 设置设备和加载模型
+    device, model, tokenizer, use_accelerate = load_model_and_tokenizer(args)
+    if model is None:
         return
     
     # 加载数据集
     datasets = load_evaluation_datasets(args)
     
     # 执行评估任务
+    evaluation_results = run_evaluations(model, tokenizer, datasets, device, args, use_accelerate)
+    
+    # 保存和可视化结果
+    save_and_visualize_results(evaluation_results, args)
+    
+    logger.info("评估完成!")
+
+# 加载模型和分词器
+def load_model_and_tokenizer(args):
+    """加载模型和分词器"""
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    logger.info(f"使用设备: {device}")
+    
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+        model_kwargs = {}
+        use_accelerate = False
+        
+        if args.fp16:
+            model_kwargs["torch_dtype"] = torch.float16
+        
+        # 根据设备类型决定如何加载模型
+        if device.type == "cuda":
+            model = AutoModelForCausalLM.from_pretrained(
+                args.model_path,
+                device_map="auto",
+                **model_kwargs
+            )
+            use_accelerate = True
+            logger.info("使用accelerate自动设备映射加载模型")
+        else:
+            model = AutoModelForCausalLM.from_pretrained(
+                args.model_path,
+                **model_kwargs
+            )
+            model = model.to(device)
+            logger.info(f"模型已加载到 {device}")
+        
+        return device, model, tokenizer, use_accelerate
+    except Exception as e:
+        logger.error(f"加载模型时出错: {str(e)}")
+        return device, None, None, False
+
+# 运行所有评估任务
+def run_evaluations(model, tokenizer, datasets, device, args, use_accelerate):
+    """运行所有选定的评估任务"""
     evaluation_results = {}
     tasks = [task.strip() for task in args.tasks.split(",")]
     
+    task_evaluators = {
+        "perplexity": lambda: calculate_perplexity(model, tokenizer, datasets["perplexity"], device, args),
+        "generation": lambda: evaluate_generation(model, tokenizer, datasets["generation"], device, args, use_accelerate),
+        "qa": lambda: evaluate_qa(model, tokenizer, datasets["qa"], device, args, use_accelerate),
+        "classification": lambda: evaluate_classification(model, tokenizer, datasets["classification"], device, args, use_accelerate)
+    }
+    
     for task in tasks:
         if task in datasets and datasets[task]:
-            if task == "perplexity":
-                logger.info("开始困惑度评估...")
-                evaluation_results["perplexity"] = calculate_perplexity(
-                    model, tokenizer, datasets["perplexity"], device, args
-                )
-            
-            elif task == "generation":
-                logger.info("开始生成能力评估...")
-                # 传递use_accelerate标志
-                evaluation_results["generation"] = evaluate_generation(
-                    model, tokenizer, datasets["generation"], device, args, use_accelerate
-                )
-            
-            elif task == "qa":
-                logger.info("开始问答能力评估...")
-                # 传递use_accelerate标志
-                evaluation_results["qa"] = evaluate_qa(
-                    model, tokenizer, datasets["qa"], device, args, use_accelerate
-                )
-            
-            elif task == "classification":
-                logger.info("开始分类能力评估...")
-                # 传递use_accelerate标志
-                evaluation_results["classification"] = evaluate_classification(
-                    model, tokenizer, datasets["classification"], device, args, use_accelerate
-                )
+            logger.info(f"开始{task}评估...")
+            if task in task_evaluators:
+                evaluation_results[task] = task_evaluators[task]()
         else:
             logger.warning(f"未找到{task}任务的数据集，跳过评估")
     
+    return evaluation_results
+
+# 保存和可视化结果
+def save_and_visualize_results(evaluation_results, args):
+    """保存评估结果并创建可视化"""
     # 保存评估结果
     results_file = os.path.join(args.output_dir, "evaluation_results.json")
     with open(results_file, 'w', encoding='utf-8') as f:
@@ -1127,16 +1194,19 @@ def main():
     
     # 保存生成文本示例
     if args.save_generations and "generation" in evaluation_results:
-        generations_file = os.path.join(args.output_dir, "generated_texts.txt")
-        with open(generations_file, 'w', encoding='utf-8') as f:
-            for i, sample in enumerate(evaluation_results["generation"]["generation_samples"]):
-                f.write(f"提示 {i+1}: {sample['prompt']}\n")
-                f.write(f"生成: {sample['generated_text']}\n")
-                f.write("-" * 50 + "\n")
-        
-        logger.info(f"生成文本已保存到 {generations_file}")
+        save_generated_texts(evaluation_results["generation"]["generation_samples"], args.output_dir)
+
+# 保存生成文本示例
+def save_generated_texts(samples, output_dir):
+    """保存生成的文本示例到文件"""
+    generations_file = os.path.join(output_dir, "generated_texts.txt")
+    with open(generations_file, 'w', encoding='utf-8') as f:
+        for i, sample in enumerate(samples):
+            f.write(f"提示 {i+1}: {sample['prompt']}\n")
+            f.write(f"生成: {sample['generated_text']}\n")
+            f.write("-" * 50 + "\n")
     
-    logger.info("评估完成!")
+    logger.info(f"生成文本已保存到 {generations_file}")
 
 if __name__ == "__main__":
     main() 
