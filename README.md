@@ -99,7 +99,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
 
 ## chat
 ```
-python test_chat.py --model_path output/qwen_novel_pretrain_stage2 \
+python test_chat.py --model_path output/qwen_novel_pretrain_stage1 \
 --max_new_tokens 100 --temperature 0.5
 
 

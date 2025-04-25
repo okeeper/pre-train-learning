@@ -3,11 +3,23 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --model_name_or_path Qwen/Qwen2.5-1.5B-Instruct \
   --output_dir output/qwen_novel_pretrain_stage1 \
   --wandb_name qwen_novel_pretrain_stage1 \
-  --file_pattern "xd_chunks_64.json,xd_chunks_128.json" \
+  --file_pattern "xd_chunks_32.json,xd_chunks_128.json" \
   --per_device_train_batch_size 32 \
   --gradient_accumulation_steps 4 \
   --max_seq_length 128 \
-  --num_train_epochs 0.7 \
+  --num_train_epochs 1.5 \
+  --learning_rate 1e-5 \
+  --use_wandb
+
+python pretrain_qwen_novel.py \
+  --model_name_or_path Qwen/Qwen2.5-1.5B-Instruct \
+  --output_dir output/qwen_novel_pretrain_stage1 \
+  --wandb_name qwen_novel_pretrain_stage1 \
+  --file_pattern "xd_chunks_32.json,xd_chunks_128.json" \
+  --per_device_train_batch_size 32 \
+  --gradient_accumulation_steps 4 \
+  --max_seq_length 128 \
+  --num_train_epochs 1.5 \
   --learning_rate 1e-5 \
   --use_wandb
 
