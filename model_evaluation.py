@@ -587,7 +587,7 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
     return generation_stats
 
 # 评估问答能力
-def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate):
+def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
     logger.info("评估问答能力...")
     model.eval()
     results = []
@@ -722,7 +722,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate):
     return qa_stats
 
 # 评估分类能力
-def evaluate_classification(model, tokenizer, classification_dataset, device, args, use_accelerate):
+def evaluate_classification(model, tokenizer, classification_dataset, device, args, use_accelerate=False):
     logger.info("评估分类能力...")
     model.eval()
     pipeline = TextGenerationPipeline(
