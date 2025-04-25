@@ -124,6 +124,7 @@ def parse_args():
     parser.add_argument(
         "--fp16",
         action="store_true",
+        default=True,
         help="是否使用混合精度训练",
     )
     parser.add_argument(
@@ -416,6 +417,11 @@ def main():
             
         # 仅初始化一次分布式环境
         if not torch.distributed.is_initialized():
+            # 使用NCCL后端，并设置更优的通信参数
+            os.environ["NCCL_DEBUG"] = "INFO"  # 可以设置为INFO以查看NCCL详细日志
+            os.environ["NCCL_IB_DISABLE"] = "0"  # 启用InfiniBand支持
+            os.environ["NCCL_SOCKET_IFNAME"] = "^lo,docker"  # 避免使用某些网络接口
+            
             torch.distributed.init_process_group(backend="nccl")
             
         logger.info(f"使用分布式训练，rank={args.local_rank}，设备={torch.cuda.current_device()}")
@@ -439,8 +445,9 @@ def main():
     # 加载模型配置和分词器
     logger.info(f"加载模型配置: {args.model_name_or_path}")
     model_config = AutoConfig.from_pretrained(args.model_name_or_path)
-    if args.gradient_checkpointing:
-        model_config.use_cache = False
+    
+    # 启用梯度检查点以节省内存
+    model_config.use_cache = False
     
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
     tokenizer.pad_token = tokenizer.eos_token
@@ -450,11 +457,13 @@ def main():
     logger.info(f"加载预训练模型: {args.model_name_or_path}")
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path, 
-        config=model_config
+        config=model_config,
+        # 启用torch_dtype以使用混合精度
+        torch_dtype=torch.float16 if args.fp16 else None,
     )
     
-    if args.gradient_checkpointing:
-        model.gradient_checkpointing_enable()
+    # 启用梯度检查点
+    model.gradient_checkpointing_enable()
     
     # 加载数据集(所有进程需要自己的副本)
     logger.info(f"加载训练数据: {args.data_dir}")
@@ -465,16 +474,28 @@ def main():
         file_pattern=args.file_pattern
     )
     
+    # 使用DistributedSampler确保数据分布均匀
+    if is_distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset,
+            num_replicas=torch.distributed.get_world_size(),
+            rank=torch.distributed.get_rank(),
+            shuffle=True,
+            seed=args.seed
+        )
+    else:
+        train_sampler = None
+    
     # 计算有效批次大小
     gpu_count = torch.cuda.device_count()
     world_size = torch.distributed.get_world_size() if is_distributed else 1
     effective_batch_size = args.per_device_train_batch_size * world_size * args.gradient_accumulation_steps
     
-    # 仅在主进程打印训练配置
+    # 仅在主进程打印训练配置，并确保这个操作不会阻塞其他进程
     if is_main_process:
         print_training_config(args, model_config, train_dataset, effective_batch_size)
     
-    # 配置训练参数
+    # 配置训练参数，优化通信策略
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True,
@@ -486,20 +507,29 @@ def main():
         num_train_epochs=args.num_train_epochs if args.num_train_epochs > 0 else None,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
-        fp16=args.fp16,
+        fp16=args.fp16,  # 使用混合精度训练
         save_total_limit=3,
         remove_unused_columns=False,
         dataloader_num_workers=4,
         report_to=["wandb"] if args.use_wandb and is_main_process else [],
         run_name=args.wandb_name,
-        # 分布式训练参数
+        
+        # 性能优化参数
+        deepspeed=None,  # 如果需要使用DeepSpeed可以配置
+        gradient_checkpointing=True,  # 启用梯度检查点
+        
+        # 分布式训练优化参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
-        # 禁用tqdm进度条，使用简单日志
-        disable_tqdm=is_distributed,  # 分布式时禁用tqdm
-        # 日志设置
+        ddp_bucket_cap_mb=25,  # 增大通信桶大小，减少通信次数
+
+        # 日志设置 - 减少主进程的额外工作
         logging_first_step=True,
         logging_nan_inf_filter=False,
+        logging_dir=os.path.join(args.output_dir, "logs"),
+        # 减少日志IO开销
+        logging_strategy="steps",
+        
         # 确保正确显示loss
         label_smoothing_factor=0.0,
     )
@@ -520,14 +550,12 @@ def main():
         train_dataset=train_dataset,
     )
     
-    # 监控模型(仅主进程)
+    # wandb监控仅在训练前后操作，减少训练中的开销
     if args.use_wandb and args.wandb_watch != "False" and is_main_process:
-        wandb.watch(model, log=args.wandb_watch, log_freq=args.logging_steps)
+        # 设置较低的记录频率
+        wandb.watch(model, log=args.wandb_watch, log_freq=max(100, args.logging_steps * 5))
     
-    # 开始训练
-    logger.info("开始训练...")
-    
-    # 强制同步所有进程时指定设备
+    # 开始训练前确保所有进程同步，减少初始不平衡
     if is_distributed:
         # 获取当前设备ID
         device_id = torch.cuda.current_device()
