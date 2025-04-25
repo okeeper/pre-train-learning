@@ -29,6 +29,8 @@ import signal
 
 # 强制刷新所有标准输出
 os.environ["PYTHONUNBUFFERED"] = "1"
+# 解决tokenizers警告
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # 设置日志
 logging.basicConfig(
@@ -595,19 +597,16 @@ def main():
         save_total_limit=3,
         remove_unused_columns=False,
         dataloader_num_workers=4,
-        dataloader_pin_memory=True,  # 启用内存锁定提高性能
+        dataloader_pin_memory=True,
         report_to=["wandb"] if args.use_wandb and is_main_process else [],
         run_name=args.wandb_name,
+        
+        # 只在非主进程禁用进度条
+        disable_tqdm=not is_main_process,
+        
         # 分布式训练参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
-        # 只在非主进程禁用tqdm not is_main_process
-        disable_tqdm=not is_main_process,
-        # 日志设置
-        logging_first_step=True,
-        logging_nan_inf_filter=False,
-        # 确保正确显示loss
-        label_smoothing_factor=0.0,
     )
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
@@ -624,7 +623,6 @@ def main():
         args=training_args,
         data_collator=data_collator,
         train_dataset=train_dataset,
-        callbacks=[ProgressCallback(is_main_process=is_main_process)]
     )
     
     # 监控模型(仅主进程)
@@ -661,6 +659,8 @@ def main():
                 import json
                 json.dump(vars(args), f, indent=4)
         
+        # 打印模型目录
+        logger.info(f"保存最终模型成功: {args.output_dir}")
         # wandb记录(仅主进程)
         if args.use_wandb:
             # 不上传模型，只记录训练完成

@@ -25,33 +25,15 @@ def load_model_and_tokenizer(model_path, lora_path=None):
 
 def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=1024, temperature=0.7):
     """生成回复，可包含历史对话"""
-    # 构建对话列表
-    messages = [{"role": "system", "content": "你是一个专业的AI助手，擅长回答用户的问题。"}]
+
+    full_prompt = "你是一个专业的小说阅读专家，擅长根据小说故事内容回答用户的问题。\n\n"
+    for h_user, h_assistant in history:
+        if h_user:
+            full_prompt += f"用户：{h_user}\n"
+        else:
+            full_prompt += f"助手：{h_assistant}\n\n"
     
-    # 添加历史对话
-    if history:
-        for h_user, h_assistant in history:
-            messages.append({"role": "user", "content": h_user})
-            messages.append({"role": "assistant", "content": h_assistant})
-    
-    # 添加当前用户输入
-    messages.append({"role": "user", "content": prompt.replace("用户：", "").replace("\n助手：", "")})
-    
-    # 使用tokenizer的chat_template而不是模型的方法
-    if hasattr(tokenizer, 'apply_chat_template'):
-        full_prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False
-        )
-    else:
-        # 回退到手动构建提示
-        full_prompt = "你是一个专业的AI助手，擅长回答用户的问题。\n\n"
-        for msg in messages[1:]:  # 跳过系统消息
-            if msg["role"] == "user":
-                full_prompt += f"用户：{msg['content']}\n"
-            else:
-                full_prompt += f"助手：{msg['content']}\n\n"
-    
+    full_prompt = full_prompt + "用户：" + prompt + "\n助手："
     inputs = tokenizer(full_prompt, return_tensors="pt").to(model.device)
     
     outputs = model.generate(
