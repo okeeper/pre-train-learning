@@ -601,8 +601,8 @@ def main():
         # 分布式训练参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
-        # 只在非主进程禁用tqdm
-        disable_tqdm=not is_main_process,
+        # 只在非主进程禁用tqdm not is_main_process
+        #disable_tqdm=True,
         # 日志设置
         logging_first_step=True,
         logging_nan_inf_filter=False,
