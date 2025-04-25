@@ -25,14 +25,22 @@ def load_model_and_tokenizer(model_path, lora_path=None):
 
 def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=1024, temperature=0.7):
     """生成回复，可包含历史对话"""
-    # 构建包含历史记录的完整提示
-    full_prompt = prompt
-    if history:
-        history_text = ""
-        for h_user, h_assistant in history:
-            history_text += f"用户：{h_user}\n助手：{h_assistant}\n"
-        full_prompt = history_text + prompt
+    messages = [{"role": "system", "content": "你是一个专业的AI助手，擅长回答用户的问题。"}]
     
+    # 添加历史对话
+    if history:
+        for h_user, h_assistant in history:
+            messages.append({"role": "user", "content": h_user})
+            messages.append({"role": "assistant", "content": h_assistant})
+    
+    # 添加当前用户输入
+    messages.append({"role": "user", "content": prompt})
+    
+    full_prompt = model.apply_chat_template(
+        messages,
+        tokenize=False
+    )
+
     inputs = tokenizer(full_prompt, return_tensors="pt").to(model.device)
     
     outputs = model.generate(
