@@ -523,13 +523,20 @@ def calculate_perplexity(model, tokenizer, eval_dataset, device, args):
     return perplexity_stats
 
 # 评估生成能力
-def evaluate_generation(model, tokenizer, eval_prompts, device, args):
+def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accelerate=False):
     logger.info("评估生成能力...")
-    pipeline = TextGenerationPipeline(
-        model=model, 
-        tokenizer=tokenizer,
-        device=0 if device.type == "cuda" else -1
-    )
+    
+    # 根据是否使用accelerate决定如何创建pipeline
+    if use_accelerate:
+        pipeline = TextGenerationPipeline(
+            model=model, 
+            tokenizer=tokenizer,
+        )
+    else:
+        pipeline = TextGenerationPipeline(
+            model=model, 
+            tokenizer=tokenizer,
+        )
     
     results = []
     for prompt in tqdm(eval_prompts, desc="生成文本"):
@@ -580,14 +587,15 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args):
     return generation_stats
 
 # 评估问答能力
-def evaluate_qa(model, tokenizer, qa_dataset, device, args):
+def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate):
     logger.info("评估问答能力...")
     model.eval()
     results = []
+    
+    # 修改这部分代码，不再指定device参数
     pipeline = TextGenerationPipeline(
         model=model, 
         tokenizer=tokenizer,
-        device=0 if device.type == "cuda" else -1
     )
     
     # 确保qa_dataset有正确的格式
@@ -714,13 +722,12 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args):
     return qa_stats
 
 # 评估分类能力
-def evaluate_classification(model, tokenizer, classification_dataset, device, args):
+def evaluate_classification(model, tokenizer, classification_dataset, device, args, use_accelerate):
     logger.info("评估分类能力...")
     model.eval()
     pipeline = TextGenerationPipeline(
         model=model, 
         tokenizer=tokenizer,
-        device=0 if device.type == "cuda" else -1
     )
     
     # 提取数据集
@@ -1106,19 +1113,27 @@ def main():
     try:
         tokenizer = AutoTokenizer.from_pretrained(args.model_path)
         model_kwargs = {}
+        use_accelerate = False  # 添加标志跟踪是否使用accelerate
         
         if args.fp16:
             model_kwargs["torch_dtype"] = torch.float16
         
-        model = AutoModelForCausalLM.from_pretrained(
-            args.model_path,
-            device_map="auto" if device.type == "cuda" else None,
-            **model_kwargs
-        )
-        
+        # 根据设备类型决定如何加载模型
         if device.type == "cuda":
-            logger.info("模型已加载到GPU")
+            # 在CUDA环境中，使用自动设备映射
+            model = AutoModelForCausalLM.from_pretrained(
+                args.model_path,
+                device_map="auto",  # 使用accelerate自动管理设备
+                **model_kwargs
+            )
+            use_accelerate = True
+            logger.info("使用accelerate自动设备映射加载模型")
         else:
+            # 在CPU环境中，直接加载模型到CPU
+            model = AutoModelForCausalLM.from_pretrained(
+                args.model_path,
+                **model_kwargs
+            )
             model = model.to(device)
             logger.info(f"模型已加载到 {device}")
     except Exception as e:
@@ -1142,20 +1157,23 @@ def main():
             
             elif task == "generation":
                 logger.info("开始生成能力评估...")
+                # 传递use_accelerate标志
                 evaluation_results["generation"] = evaluate_generation(
-                    model, tokenizer, datasets["generation"], device, args
+                    model, tokenizer, datasets["generation"], device, args, use_accelerate
                 )
             
             elif task == "qa":
                 logger.info("开始问答能力评估...")
+                # 传递use_accelerate标志
                 evaluation_results["qa"] = evaluate_qa(
-                    model, tokenizer, datasets["qa"], device, args
+                    model, tokenizer, datasets["qa"], device, args, use_accelerate
                 )
             
             elif task == "classification":
                 logger.info("开始分类能力评估...")
+                # 传递use_accelerate标志
                 evaluation_results["classification"] = evaluate_classification(
-                    model, tokenizer, datasets["classification"], device, args
+                    model, tokenizer, datasets["classification"], device, args, use_accelerate
                 )
         else:
             logger.warning(f"未找到{task}任务的数据集，跳过评估")

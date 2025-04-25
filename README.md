@@ -126,7 +126,7 @@ python test_chat.py --model_path /path/to/your/model --lora_path /path/to/your/l
 ```
 # c3,squad_v2,
 python model_evaluation.py \
-    --model_path ./output \
+    --model_path output/qwen_novel_pretrain_knowledge \
     --perplexity_dataset data/xd_eval_preplexity.txt \
     --qa_dataset ./data/xd_eval_qa.json \
     --classification_dataset ./data/xd_eval_classification.json \
