@@ -674,16 +674,16 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
 def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
     logger.info("正在评估问答(QA)任务...")
     
-    # 需要添加的额外库
+    # 添加正确的NLTK资源下载
     try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
+        nltk.download('punkt', quiet=True)
+    except Exception as e:
+        logger.warning(f"无法下载NLTK punkt资源: {e}")
     
     # 尝试导入METEOR评分库（如果可用）
     try:
         from nltk.translate.meteor_score import meteor_score
-        nltk.download('wordnet')
+        nltk.download('wordnet', quiet=True)
         has_meteor = True
     except (ImportError, LookupError):
         has_meteor = False
@@ -699,7 +699,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
     
     from rouge_score import rouge_scorer
     
-    # 初始化ROUGE评分器（包含更多指标）
+    # 初始化ROUGE评分器
     scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
     
     total_samples = 0
@@ -759,11 +759,11 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             rouge_scores = {"rouge1": {"f": 0}, "rouge2": {"f": 0}, "rougeL": {"f": 0}}
             rouge_1_score = rouge_2_score = rouge_l_score = 0
         
-        # 计算BLEU分数
+        # 计算BLEU分数 - 修改为简单的空格分词，避免使用nltk分词器
         try:
-            # 分词
-            ref_tokens = nltk.word_tokenize(expected_answer.lower())
-            gen_tokens = nltk.word_tokenize(generated_answer.lower())
+            # 使用简单的空格分词替代nltk分词器
+            ref_tokens = expected_answer.lower().split()
+            gen_tokens = generated_answer.lower().split()
             
             # 使用平滑函数计算BLEU
             smoothie = SmoothingFunction().method1
@@ -774,17 +774,17 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             bleu_score = 0
         
         # 计算METEOR分数（如果可用）
+        meteor_value = 0
         if has_meteor and expected_answer and generated_answer:
             try:
+                # 直接使用split()分词，避免依赖nltk分词器
                 meteor_value = meteor_score([expected_answer.split()], generated_answer.split())
                 meteor_sum += meteor_value
             except Exception as e:
                 logger.error(f"计算METEOR分数时出错: {e}")
-                meteor_value = 0
-        else:
-            meteor_value = 0
         
         # 计算BERTScore（如果可用）
+        bertscore_value = 0
         if has_bertscore and expected_answer and generated_answer:
             try:
                 # 每20个样本计算一次BERTScore，以提高效率
@@ -792,16 +792,10 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                     P, R, F1 = bert_score([generated_answer], [expected_answer], lang="zh")
                     bertscore_value = F1.item()
                     bertscore_sum += bertscore_value
-                else:
-                    # 使用默认值占位
-                    bertscore_value = 0
             except Exception as e:
                 logger.error(f"计算BERTScore时出错: {e}")
-                bertscore_value = 0
-        else:
-            bertscore_value = 0
         
-        # 收集样本数据（包含所有指标）
+        # 收集样本数据（包含所有可用指标）
         sample = {
             "question": question,
             "expected_answer": expected_answer,
@@ -812,10 +806,15 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                 "rouge-2": {"f": rouge_2_score},
                 "rouge-l": {"f": rouge_l_score}
             },
-            "bleu": bleu_score,
-            "meteor": meteor_value,
-            "bertscore": bertscore_value
+            "bleu": bleu_score
         }
+        
+        # 只有在实际计算了METEOR和BERTScore时才添加这些字段
+        if has_meteor:
+            sample["meteor"] = meteor_value
+        if has_bertscore:
+            sample["bertscore"] = bertscore_value
+            
         samples.append(sample)
         total_samples += 1
     
@@ -825,20 +824,27 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
     avg_rouge_2 = rouge_2_sum / total_samples if total_samples > 0 else 0
     avg_rouge_l = rouge_l_sum / total_samples if total_samples > 0 else 0
     avg_bleu = bleu_sum / total_samples if total_samples > 0 else 0
-    avg_meteor = meteor_sum / total_samples if total_samples > 0 else 0
-    avg_bertscore = bertscore_sum / total_samples if total_samples > 0 else 0
     
-    # 返回结果，包含所有额外指标
-    return {
+    # 组装结果
+    results = {
         "exact_match": exact_match_ratio,
         "rouge-1-f": avg_rouge_1,
         "rouge-2-f": avg_rouge_2,
         "rouge-l-f": avg_rouge_l,
         "bleu": avg_bleu,
-        "meteor": avg_meteor,
-        "bertscore": avg_bertscore,
         "samples": samples
     }
+    
+    # 只在可用时添加METEOR和BERTScore
+    if has_meteor:
+        avg_meteor = meteor_sum / total_samples if total_samples > 0 else 0
+        results["meteor"] = avg_meteor
+        
+    if has_bertscore:
+        avg_bertscore = bertscore_sum / total_samples if total_samples > 0 else 0
+        results["bertscore"] = avg_bertscore
+    
+    return results
 
 # 重构评估分类能力函数
 def evaluate_classification(model, tokenizer, classification_dataset, device, args, use_accelerate=False):
