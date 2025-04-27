@@ -427,7 +427,36 @@ def load_file_dataset(file_path, task_type):
                 
         elif file_path.endswith('.csv'):
             import pandas as pd
-            df = pd.read_csv(file_path)
+            try:
+                # 先尝试自动推断分隔符
+                df = pd.read_csv(file_path, sep=None, engine='python')
+            except Exception as e1:
+                logger.warning(f"常规加载失败，尝试带引号处理: {e1}")
+                try:
+                    # 如果失败，尝试使用更宽松的参数
+                    df = pd.read_csv(file_path, 
+                                    sep=',',               # 明确指定逗号分隔符
+                                    engine='python',       # 使用Python解析引擎，更灵活
+                                    quotechar='"',         # 引号字符
+                                    escapechar='\\',       # 转义字符
+                                    on_bad_lines='warn',   # 遇到错误行时发出警告
+                                    quoting=1)             # QUOTE_ALL模式
+                    logger.info(f"使用宽松参数成功加载CSV文件")
+                except Exception as e2:
+                    logger.warning(f"宽松参数加载也失败，尝试跳过错误行: {e2}")
+                    try:
+                        # 最后尝试跳过错误行
+                        df = pd.read_csv(file_path,
+                                        sep=',',
+                                        engine='python',
+                                        quotechar='"',
+                                        escapechar='\\',
+                                        on_bad_lines='skip',  # 跳过错误行
+                                        quoting=1)
+                        logger.info(f"跳过错误行，成功加载CSV文件")
+                    except Exception as e3:
+                        logger.error(f"所有尝试都失败了: {e3}")
+                        return None
             
             # 转换为列表格式
             data = df.to_dict('records')
@@ -1277,10 +1306,10 @@ def upload_to_wandb(evaluation_results, args, datasets):
             # 为每个样本获取所有指标
             qa_samples_data = []
             for i, sample in enumerate(samples):
-                # 提取或计算各项指标
-                rouge_l_score = sample.get("rouge_scores", {}).get("rouge-l", {}).get("f", 0)
-                rouge_1_score = sample.get("rouge_scores", {}).get("rouge-1", {}).get("f", 0)
-                rouge_2_score = sample.get("rouge_scores", {}).get("rouge-2", {}).get("f", 0)
+                # 提取或计算各项指标 - 修正ROUGE分数路径
+                rouge_l_score = sample.get("rouge_scores", {}).get("rougeL", {}).get("f", 0)
+                rouge_1_score = sample.get("rouge_scores", {}).get("rouge1", {}).get("f", 0)
+                rouge_2_score = sample.get("rouge_scores", {}).get("rouge2", {}).get("f", 0)
                 bleu_score = sample.get("bleu", 0)
                 meteor_score = sample.get("meteor", 0)
                 bertscore_value = sample.get("bertscore", 0)
