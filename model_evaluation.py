@@ -170,14 +170,22 @@ def generate_with_qwen_format(model, tokenizer, prompt, system_prompt, max_new_t
     for k, v in inputs.items():
         inputs[k] = v.to(model.device)
     
-    # 设置生成参数
+    # 设置生成参数 - 修复警告
     gen_kwargs = {
         "max_new_tokens": max_new_tokens,
-        "temperature": temperature,
-        "do_sample": do_sample,
-        "top_p": top_p,
         "pad_token_id": tokenizer.pad_token_id,
     }
+    
+    # 只有在启用采样时才设置相关参数
+    if do_sample:
+        gen_kwargs.update({
+            "do_sample": True,
+            "temperature": temperature,
+            "top_p": top_p
+        })
+    else:
+        # 不使用采样时使用贪婪解码
+        gen_kwargs["do_sample"] = False
     
     # 添加停止标准
     generate_signature = inspect.signature(model.generate)
@@ -621,7 +629,8 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
                 prompt=prompt,
                 system_prompt=system_prompt,
                 max_new_tokens=args.max_length,
-                temperature=args.temperature
+                temperature=args.temperature,
+                do_sample=True  # 生成任务通常使用采样
             )
                 
             results.append({
@@ -685,7 +694,8 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                 prompt=question,
                 system_prompt=system_prompt,
                 max_new_tokens=args.max_length,
-                temperature=0.3  # 问答使用低温度
+                temperature=0.3,
+                do_sample=True  # 问答使用低温度采样
             )
             
             # 计算指标
@@ -811,8 +821,8 @@ def evaluate_classification(model, tokenizer, classification_dataset, device, ar
                 prompt=prompt,
                 system_prompt=system_prompt,
                 max_new_tokens=min(50, args.max_length),
-                temperature=0.1,  # 分类使用极低温度
-                do_sample=False   # 分类不使用采样
+                temperature=0.1,
+                do_sample=False  # 分类使用贪婪解码更适合
             )
             
             # 清理生成的标签
@@ -1004,9 +1014,9 @@ def create_visualizations(evaluation_results, args, datasets):
     
     return visualizations
 
-# 优化wandb上报函数，重点显示采样数据
+# 简化版本的wandb上传函数，专注上报采样数据和关键指标
 def upload_to_wandb(evaluation_results, args, datasets):
-    logger.info("正在将模型评估采样结果上传到wandb...")
+    logger.info("正在将模型评估采样数据上传到wandb...")
     
     # 初始化wandb
     run_name = args.wandb_name or f"eval-{args.model_path.split('/')[-1]}"
@@ -1016,226 +1026,183 @@ def upload_to_wandb(evaluation_results, args, datasets):
         config=vars(args)
     )
     
-    # 记录核心评估指标
-    metrics = {}
-    
-    # 基本信息
+    # 记录基本模型信息
     model_info = {
         "model_path": args.model_path,
         "tasks": args.tasks
     }
     wandb.config.update(model_info)
     
-    # 上报问答任务结果
-    if "qa" in evaluation_results:
-        metrics["qa/rouge-l"] = evaluation_results["qa"]["rouge-l-f"]
-        metrics["qa/exact_match"] = evaluation_results["qa"]["exact_match"]
-        
-        # 上报多个有代表性的问答样本
-        samples = evaluation_results["qa"]["samples"]
-        if samples:
-            # 选择几个典型样本：最佳、中等和最差的样本
-            try:
-                # 按rouge-l分数排序
-                sorted_samples = sorted(
-                    samples, 
-                    key=lambda x: x.get("rouge_scores", {}).get("rouge-l", {}).get("f", 0) 
-                    if isinstance(x.get("rouge_scores", {}), dict) else 0
-                )
-                
-                # 最多选择5个样本展示
-                max_samples = min(5, len(sorted_samples))
-                step_size = max(1, len(sorted_samples) // max_samples)
-                
-                qa_examples = []
-                # 选择分布均匀的样本
-                for i in range(0, len(sorted_samples), step_size):
-                    if len(qa_examples) >= max_samples:
-                        break
-                    sample = sorted_samples[i]
-                    
-                    # 获取rouge-l得分
-                    rouge_l = sample.get("rouge_scores", {}).get("rouge-l", {}).get("f", 0)
-                    if isinstance(rouge_l, float):
-                        rouge_l = f"{rouge_l:.3f}"
-                        
-                    qa_examples.append([
-                        sample["question"],
-                        sample["expected_answer"],
-                        sample["generated_answer"],
-                        sample["exact_match"],
-                        rouge_l
-                    ])
-            except Exception as e:
-                # 如果排序失败，直接选择前几个样本
-                logger.warning(f"样本排序失败: {e}")
-                qa_examples = []
-                for i, sample in enumerate(samples[:max_samples]):
-                    qa_examples.append([
-                        sample["question"],
-                        sample["expected_answer"],
-                        sample["generated_answer"],
-                        sample["exact_match"],
-                        "N/A"
-                    ])
-            
-            metrics["qa/samples"] = wandb.Table(
-                columns=["问题", "标准答案", "模型生成答案", "精确匹配", "ROUGE-L"],
-                data=qa_examples
-            )
-    
-    # 上报分类任务结果
-    if "classification" in evaluation_results:
-        metrics["classification/accuracy"] = evaluation_results["classification"]["accuracy"]
-        metrics["classification/f1"] = evaluation_results["classification"]["f1"]
-        
-        # 上报分类样本
-        samples = evaluation_results["classification"]["samples"]
-        if samples:
-            # 选择一些典型样本：正确和错误的样本
-            classification_examples = []
-            correct_samples = [s for s in samples if s["correct"] == 1]
-            wrong_samples = [s for s in samples if s["correct"] == 0]
-            
-            # 最多选择6个样本：3个正确，3个错误
-            for i in range(min(3, len(correct_samples))):
-                sample = correct_samples[i]
-                classification_examples.append([
-                    sample["text"][:100] + "..." if len(sample["text"]) > 100 else sample["text"],
-                    sample["true_label"],
-                    sample["predicted_label"],
-                    "✓" if sample["correct"] else "✗"
-                ])
-            
-            for i in range(min(3, len(wrong_samples))):
-                sample = wrong_samples[i]
-                classification_examples.append([
-                    sample["text"][:100] + "..." if len(sample["text"]) > 100 else sample["text"],
-                    sample["true_label"],
-                    sample["predicted_label"],
-                    "✓" if sample["correct"] else "✗"
-                ])
-            
-            metrics["classification/samples"] = wandb.Table(
-                columns=["文本", "真实标签", "预测标签", "是否正确"],
-                data=classification_examples
-            )
-            
-            # 尝试上报混淆矩阵
-            if "confusion_matrix" in evaluation_results["classification"]:
-                confusion_data = []
-                for true_label, predictions in evaluation_results["classification"]["confusion_matrix"].items():
-                    for pred_label, count in predictions.items():
-                        confusion_data.append({"真实标签": true_label, "预测标签": pred_label, "数量": count})
-                
-                if confusion_data:
-                    confusion_df = pd.DataFrame(confusion_data)
-                    metrics["classification/confusion_matrix"] = wandb.Table(
-                        dataframe=confusion_df
-                    )
-    
-    # 上报困惑度评估结果
+    # ======= 困惑度任务(perplexity) =======
     if "perplexity" in evaluation_results:
-        metrics["perplexity/avg"] = evaluation_results["perplexity"]["avg_perplexity"]
+        # 仅记录平均困惑度
+        avg_ppl = evaluation_results["perplexity"]["avg_perplexity"]
+        wandb.log({"perplexity/avg": avg_ppl})
         
-        # 上报困惑度分布直方图
+        # 上传样本级困惑度数据
         perplexities = evaluation_results["perplexity"]["per_sample_perplexities"]
         if perplexities:
             # 过滤掉无穷值
             valid_perplexities = [p for p in perplexities if not math.isinf(p)]
-            if valid_perplexities:
-                # 上报困惑度直方图
-                metrics["perplexity/distribution"] = wandb.Histogram(valid_perplexities)
-    
-    # 上报生成能力评估结果
-    if "generation" in evaluation_results:
-        metrics["generation/lexical_diversity"] = evaluation_results["generation"]["lexical_diversity"]
-        metrics["generation/avg_length"] = evaluation_results["generation"]["avg_length"]
-        
-        # 上报生成样本
-        samples = evaluation_results["generation"]["generation_samples"]
-        if samples:
-            # 选择几个典型样本：最长、中等长度和最短的样本
-            try:
-                # 按长度排序
-                sorted_samples = sorted(samples, key=lambda x: x["length"])
-                
-                # 最多选择5个样本
-                max_samples = min(5, len(sorted_samples))
-                step_size = max(1, len(sorted_samples) // max_samples)
-                
-                generation_examples = []
-                # 选择分布均匀的样本
-                for i in range(0, len(sorted_samples), step_size):
-                    if len(generation_examples) >= max_samples:
-                        break
-                    sample = sorted_samples[i]
-                    generation_examples.append([
-                        sample["prompt"],
-                        sample["generated_text"],
-                        sample["length"],
-                        sample["unique_words"] / sample["length"] if sample["length"] > 0 else 0
-                    ])
-            except Exception as e:
-                # 如果排序失败，直接选择前几个样本
-                logger.warning(f"样本排序失败: {e}")
-                generation_examples = []
-                for i, sample in enumerate(samples[:max_samples]):
-                    generation_examples.append([
-                        sample["prompt"],
-                        sample["generated_text"],
-                        sample["length"],
-                        sample["unique_words"] / sample["length"] if sample["length"] > 0 else 0
-                    ])
             
-            metrics["generation/samples"] = wandb.Table(
-                columns=["提示", "生成文本", "长度", "词汇多样性"],
-                data=generation_examples
-            )
+            # 为每个困惑度样本创建索引（作为标识）
+            indices = list(range(len(valid_perplexities)))
+            
+            # 创建困惑度样本数据表
+            ppl_data = [[i, p] for i, p in zip(indices, valid_perplexities)]
+            
+            # 取前200个样本避免表格过大
+            if len(ppl_data) > 200:
+                # 为确保表示性，选择均匀分布的200个样本
+                step = len(ppl_data) // 200
+                ppl_data = [ppl_data[i] for i in range(0, len(ppl_data), step)][:200]
+            
+            wandb.log({
+                "perplexity/samples": wandb.Table(
+                    columns=["样本ID", "困惑度值"],
+                    data=ppl_data
+                )
+            })
     
-    # 创建核心指标摘要
-    task_counts = {}
-    for task in ["qa", "classification", "perplexity", "generation"]:
-        if task in evaluation_results:
-            if task == "qa":
-                task_counts[task] = len(evaluation_results[task]["samples"])
-            elif task == "classification":
-                task_counts[task] = len(evaluation_results[task]["samples"])
-            elif task == "perplexity":
-                task_counts[task] = len(evaluation_results[task]["per_sample_perplexities"])
-            elif task == "generation":
-                task_counts[task] = len(evaluation_results[task]["generation_samples"])
-    
-    summary_text = f"<h3>模型评估结果: {args.model_path}</h3><br>"
-    summary_text += "<table style='width:100%; border:1px solid #ddd;'>"
-    summary_text += "<tr style='background-color:#f8f8f8;'><th>任务</th><th>核心指标</th><th>样本数</th></tr>"
-    
-    if "perplexity" in evaluation_results:
-        ppl = evaluation_results["perplexity"]["avg_perplexity"]
-        summary_text += f"<tr><td>困惑度</td><td>{ppl:.3f}</td><td>{task_counts.get('perplexity', 'N/A')}</td></tr>"
-    
+    # ======= 问答任务(qa) =======
     if "qa" in evaluation_results:
+        # 记录核心指标
         rouge_l = evaluation_results["qa"]["rouge-l-f"]
         exact_match = evaluation_results["qa"]["exact_match"]
-        summary_text += f"<tr><td>问答</td><td>ROUGE-L: {rouge_l:.3f}<br>精确匹配: {exact_match:.3f}</td><td>{task_counts.get('qa', 'N/A')}</td></tr>"
+        wandb.log({
+            "qa/rouge_l": rouge_l,
+            "qa/exact_match": exact_match
+        })
+        
+        # 上传全部问答样本
+        samples = evaluation_results["qa"]["samples"]
+        if samples:
+            # 为每个样本获取rouge-l指标
+            qa_samples_data = []
+            for i, sample in enumerate(samples):
+                rouge_l_score = sample.get("rouge_scores", {}).get("rouge-l", {}).get("f", 0)
+                if not isinstance(rouge_l_score, (int, float)):
+                    rouge_l_score = 0
+                
+                qa_samples_data.append([
+                    i,  # 样本ID
+                    sample["question"],
+                    sample["expected_answer"],
+                    sample["generated_answer"],
+                    sample["exact_match"],
+                    round(rouge_l_score, 4)
+                ])
+            
+            # 取前200个样本避免表格过大
+            if len(qa_samples_data) > 200:
+                # 均匀抽样
+                step = len(qa_samples_data) // 200
+                qa_samples_data = [qa_samples_data[i] for i in range(0, len(qa_samples_data), step)][:200]
+            
+            wandb.log({
+                "qa/samples": wandb.Table(
+                    columns=["样本ID", "问题", "标准答案", "生成答案", "精确匹配", "ROUGE-L"],
+                    data=qa_samples_data
+                )
+            })
+    
+    # ======= 分类任务(classification) =======
+    if "classification" in evaluation_results:
+        # 记录核心指标
+        accuracy = evaluation_results["classification"]["accuracy"]
+        f1 = evaluation_results["classification"]["f1"]
+        wandb.log({
+            "classification/accuracy": accuracy,
+            "classification/f1": f1
+        })
+        
+        # 上传分类样本
+        samples = evaluation_results["classification"]["samples"]
+        if samples:
+            # 准备样本数据
+            classification_data = []
+            for i, sample in enumerate(samples):
+                classification_data.append([
+                    i,  # 样本ID
+                    sample["text"][:150] + "..." if len(sample["text"]) > 150 else sample["text"],
+                    sample["true_label"],
+                    sample["predicted_label"],
+                    sample["correct"]
+                ])
+            
+            # 限制样本数量
+            if len(classification_data) > 200:
+                # 为确保表示性，我们均匀采样而不是简单截断
+                step = len(classification_data) // 200
+                classification_data = [classification_data[i] for i in range(0, len(classification_data), step)][:200]
+            
+            wandb.log({
+                "classification/samples": wandb.Table(
+                    columns=["样本ID", "文本", "真实标签", "预测标签", "是否正确"],
+                    data=classification_data
+                )
+            })
+    
+    # ======= 生成任务(generation) =======
+    if "generation" in evaluation_results:
+        # 记录核心指标
+        lexical_diversity = evaluation_results["generation"]["lexical_diversity"]
+        avg_length = evaluation_results["generation"]["avg_length"]
+        wandb.log({
+            "generation/lexical_diversity": lexical_diversity,
+            "generation/avg_length": avg_length
+        })
+        
+        # 上传生成样本
+        samples = evaluation_results["generation"]["generation_samples"]
+        if samples:
+            # 准备样本数据
+            generation_data = []
+            for i, sample in enumerate(samples):
+                # 计算每个样本的词汇多样性
+                lex_div = sample["unique_words"] / sample["length"] if sample["length"] > 0 else 0
+                
+                generation_data.append([
+                    i,  # 样本ID
+                    sample["prompt"],
+                    sample["generated_text"],
+                    sample["length"],
+                    round(lex_div, 4)
+                ])
+            
+            # 限制样本数量
+            if len(generation_data) > 200:
+                step = len(generation_data) // 200
+                generation_data = [generation_data[i] for i in range(0, len(generation_data), step)][:200]
+            
+            wandb.log({
+                "generation/samples": wandb.Table(
+                    columns=["样本ID", "提示", "生成文本", "长度", "词汇多样性"],
+                    data=generation_data
+                )
+            })
+    
+    # 创建简洁的摘要表格
+    summary_data = []
+    if "perplexity" in evaluation_results:
+        summary_data.append(["困惑度(PPL)", f"{evaluation_results['perplexity']['avg_perplexity']:.4f}", len(evaluation_results["perplexity"]["per_sample_perplexities"])])
+    
+    if "qa" in evaluation_results:
+        summary_data.append(["问答(QA)", f"精确匹配: {evaluation_results['qa']['exact_match']:.4f}, ROUGE-L: {evaluation_results['qa']['rouge-l-f']:.4f}", len(evaluation_results["qa"]["samples"])])
     
     if "classification" in evaluation_results:
-        acc = evaluation_results["classification"]["accuracy"]
-        f1 = evaluation_results["classification"]["f1"]
-        summary_text += f"<tr><td>分类</td><td>准确率: {acc:.3f}<br>F1分数: {f1:.3f}</td><td>{task_counts.get('classification', 'N/A')}</td></tr>"
+        summary_data.append(["分类(CLS)", f"准确率: {evaluation_results['classification']['accuracy']:.4f}, F1: {evaluation_results['classification']['f1']:.4f}", len(evaluation_results["classification"]["samples"])])
     
     if "generation" in evaluation_results:
-        lex_div = evaluation_results["generation"]["lexical_diversity"]
-        avg_len = evaluation_results["generation"]["avg_length"]
-        summary_text += f"<tr><td>生成</td><td>词汇多样性: {lex_div:.3f}<br>平均长度: {avg_len:.1f}</td><td>{task_counts.get('generation', 'N/A')}</td></tr>"
+        summary_data.append(["生成(GEN)", f"词汇多样性: {evaluation_results['generation']['lexical_diversity']:.4f}, 平均长度: {evaluation_results['generation']['avg_length']:.1f}", len(evaluation_results["generation"]["generation_samples"])])
     
-    summary_text += "</table>"
-    
-    # 添加摘要 HTML
-    metrics["summary"] = wandb.Html(summary_text)
-    
-    # 记录所有指标
-    wandb.log(metrics)
+    if summary_data:
+        wandb.log({
+            "summary": wandb.Table(
+                columns=["任务", "核心指标", "样本数"],
+                data=summary_data
+            )
+        })
     
     # 上传原始结果文件
     results_json = os.path.join(args.output_dir, "evaluation_results.json")

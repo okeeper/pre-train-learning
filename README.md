@@ -132,7 +132,7 @@ python model_evaluation.py \
     --classification_dataset ./data/xd_eval_classification.json \
     --output_dir ./output/evaluation_results \
     --tasks perplexity,qa,classification,generation \
-    --num_samples 100 \
+    --num_samples -1 \
     --batch_size 16 \
     --fp16 \
     --use_wandb

@@ -37,7 +37,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --logging_steps 1 \
   --use_wandb
 
-# 第三阶段：使用长文本微调
+# 1
 python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --model_name_or_path Qwen/Qwen2.5-1.5B-Instruct \
   --output_dir output/qwen_novel_pretrain_long \
@@ -51,7 +51,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --use_wandb
 
 
-# -m torch.distributed.launch --nproc_per_node=2 
+# 2 -m torch.distributed.launch --nproc_per_node=2 
 python pretrain_qwen_novel.py \
   --model_name_or_path output/qwen_novel_pretrain_long \
   --output_dir output/qwen_novel_pretrain_short \
@@ -65,6 +65,7 @@ python pretrain_qwen_novel.py \
   --logging_steps 5 \
   --use_wandb
 
+# 3
 python pretrain_qwen_novel.py \
   --model_name_or_path output/qwen_novel_pretrain_short \
   --output_dir output/qwen_novel_pretrain_knowledge \
