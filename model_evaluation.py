@@ -807,8 +807,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             do_sample=False   # 贪婪解码
         ).strip()
         
-        if i < 3:
-            logger.info(f"生成答案: {generated_answer}")
         
         # 1. 精确匹配评估
         exact_match = generated_answer.lower() == expected_answer.lower()
@@ -1291,7 +1289,6 @@ def upload_to_wandb(evaluation_results, args, datasets):
                 if not isinstance(rouge_2_score, (int, float)):
                     rouge_2_score = 0
                 
-                logger.info(f"问答任务(qa)wandb上传样本 {i} - 精确匹配: {sample}")
                 # 构建样本数据行，包含所有指标
                 qa_samples_data.append([
                     i,  # 样本ID
