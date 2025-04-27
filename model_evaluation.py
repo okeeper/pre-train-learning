@@ -1014,7 +1014,7 @@ def create_visualizations(evaluation_results, args, datasets):
     
     return visualizations
 
-# 简化版本的wandb上传函数，专注上报采样数据和关键指标
+# 修改后的wandb上传函数，包含困惑度样本的原始文本
 def upload_to_wandb(evaluation_results, args, datasets):
     logger.info("正在将模型评估采样数据上传到wandb...")
     
@@ -1039,21 +1039,56 @@ def upload_to_wandb(evaluation_results, args, datasets):
         avg_ppl = evaluation_results["perplexity"]["avg_perplexity"]
         wandb.log({"perplexity/avg": avg_ppl})
         
-        # 上传样本级困惑度数据
+        # 上传样本级困惑度数据（同时包含文本内容）
         perplexities = evaluation_results["perplexity"]["per_sample_perplexities"]
-        if perplexities:
-            # 过滤掉无穷值
-            valid_perplexities = [p for p in perplexities if not math.isinf(p)]
-            
-            # 为每个困惑度样本创建索引（作为标识）
-            indices = list(range(len(valid_perplexities)))
-            
-            # 创建困惑度样本数据表
-            ppl_data = [[i, p] for i, p in zip(indices, valid_perplexities)]
+        
+        # 获取原始文本数据
+        text_samples = []
+        if datasets and "perplexity" in datasets and datasets["perplexity"]:
+            # 处理不同格式的数据集
+            if isinstance(datasets["perplexity"], list):
+                text_samples = datasets["perplexity"]
+            elif hasattr(datasets["perplexity"], "column_names"):
+                # HuggingFace数据集
+                if "text" in datasets["perplexity"].column_names:
+                    text_samples = datasets["perplexity"]["text"]
+                elif "content" in datasets["perplexity"].column_names:
+                    text_samples = datasets["perplexity"]["content"]
+                elif "sentence" in datasets["perplexity"].column_names:
+                    text_samples = datasets["perplexity"]["sentence"]
+        
+        # 确保文本样本数量与困惑度数量匹配
+        if text_samples and len(text_samples) >= len(perplexities):
+            # 过滤掉无穷值，同时保留对应的文本
+            valid_data = []
+            for i, ppl in enumerate(perplexities):
+                if not math.isinf(ppl) and i < len(text_samples):
+                    text = text_samples[i]
+                    # 限制文本长度，避免表格过大
+                    if len(text) > 300:
+                        text = text[:300] + "..."
+                    valid_data.append([i, text, ppl])
             
             # 取前200个样本避免表格过大
-            if len(ppl_data) > 200:
+            if len(valid_data) > 200:
                 # 为确保表示性，选择均匀分布的200个样本
+                step = len(valid_data) // 200
+                valid_data = [valid_data[i] for i in range(0, len(valid_data), step)][:200]
+            
+            wandb.log({
+                "perplexity/samples": wandb.Table(
+                    columns=["样本ID", "文本内容", "困惑度值"],
+                    data=valid_data
+                )
+            })
+        else:
+            # 如果没有文本数据或长度不匹配，只上传困惑度值
+            logger.warning("找不到与困惑度值对应的文本数据，只上传困惑度值")
+            valid_perplexities = [p for p in perplexities if not math.isinf(p)]
+            indices = list(range(len(valid_perplexities)))
+            ppl_data = [[i, p] for i, p in zip(indices, valid_perplexities)]
+            
+            if len(ppl_data) > 200:
                 step = len(ppl_data) // 200
                 ppl_data = [ppl_data[i] for i in range(0, len(ppl_data), step)][:200]
             
