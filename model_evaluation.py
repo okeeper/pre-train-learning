@@ -838,8 +838,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                 else:
                     # 使用标准 ROUGE 计算
                     rouge_scores = scorer.score(expected_answer, generated_answer)
-                    
-                    logger.info(f"样本 {i} - rouge_scores: {rouge_scores}")
                     # 将 ROUGE 对象转换为简单字典
                     rouge_scores = {
                         "rouge1": {"f": rouge_scores["rouge1"].fmeasure},
@@ -870,6 +868,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             "bleu": bleu_score
         }
         
+        logger.info(f"样本 {i} - 质量指标: {sample}")
         samples.append(sample)
     
     # 计算平均指标
