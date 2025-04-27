@@ -23,6 +23,11 @@ import seaborn as sns
 from collections import defaultdict
 import glob
 import inspect
+import nltk
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+from nltk.translate.meteor_score import meteor_score
+from bert_score import score as bert_score
+from rouge_score import rouge_scorer
 
 # 设置日志
 logging.basicConfig(
@@ -667,126 +672,173 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
 
 # 重构评估问答能力函数
 def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
-    """评估问答能力"""
-    logger.info("评估问答能力...")
-    model.eval()
+    logger.info("正在评估问答(QA)任务...")
     
-    # 提取问题和答案
-    questions, answers = extract_qa_data(qa_dataset, args.num_samples)
+    # 需要添加的额外库
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
     
-    if not questions:
-        logger.error("无法从数据集中提取问答对")
-        return {"error": "无法从数据集中提取问答对"}
+    # 尝试导入METEOR评分库（如果可用）
+    try:
+        from nltk.translate.meteor_score import meteor_score
+        nltk.download('wordnet')
+        has_meteor = True
+    except (ImportError, LookupError):
+        has_meteor = False
+        logger.warning("NLTK wordnet或meteor_score不可用，无法计算METEOR分数")
     
-    # 评估问答
-    rouge = Rouge()
-    exact_matches = 0
-    rouges = []
-    results = []
+    # 尝试导入BERTScore（如果可用）
+    try:
+        from bert_score import score as bert_score
+        has_bertscore = True
+    except ImportError:
+        has_bertscore = False
+        logger.warning("bert_score库不可用，无法计算BERTScore")
     
-    for question, expected_answer in tqdm(zip(questions, answers), desc="问答评估", total=len(questions)):
+    from rouge_score import rouge_scorer
+    
+    # 初始化ROUGE评分器（包含更多指标）
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+    
+    total_samples = 0
+    correct_samples = 0
+    
+    rouge_1_sum = 0
+    rouge_2_sum = 0
+    rouge_l_sum = 0
+    bleu_sum = 0
+    meteor_sum = 0
+    bertscore_sum = 0
+    
+    samples = []
+    
+    # 使用tqdm显示进度
+    for i, item in enumerate(tqdm(qa_dataset, desc="评估QA")):
+        if isinstance(item, dict):
+            question = item.get("question", "") or item.get("prompt", "")
+            expected_answer = item.get("answer", "") or item.get("response", "")
+        else:
+            # 假设dataset是(question, answer)元组的列表
+            question, expected_answer = item
+        
+        # 生成问题的答案
         try:
-            # 使用公共生成方法
-            system_prompt = "你是小说的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。"
             generated_answer = generate_with_qwen_format(
                 model=model,
                 tokenizer=tokenizer,
                 prompt=question,
-                system_prompt=system_prompt,
+                system_prompt="你是小说的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。",
                 max_new_tokens=args.max_length,
                 temperature=0.3,
                 do_sample=True  # 问答使用低温度采样
             )
-            
-            # 计算指标
-            exact_match = 1 if generated_answer.strip() == expected_answer.strip() else 0
-            exact_matches += exact_match
-            
-            # 计算ROUGE分数
-            try:
-                rouge_scores = rouge.get_scores(generated_answer, expected_answer)[0]
-                rouges.append(rouge_scores)
-            except Exception as e:
-                logger.warning(f"计算ROUGE时出错: {str(e)}")
-                rouges.append({
-                    "rouge-1": {"f": 0, "p": 0, "r": 0},
-                    "rouge-2": {"f": 0, "p": 0, "r": 0},
-                    "rouge-l": {"f": 0, "p": 0, "r": 0}
-                })
-            
-            results.append({
-                "question": question,
-                "expected_answer": expected_answer,
-                "generated_answer": generated_answer,
-                "exact_match": exact_match,
-                "rouge_scores": rouge_scores if 'rouge_scores' in locals() else {}
-            })
+            generated_answer = generated_answer.strip()
         except Exception as e:
-            logger.error(f"处理问题时出错: {str(e)}")
-            results.append({
-                "question": question,
-                "expected_answer": expected_answer,
-                "generated_answer": "生成错误",
-                "exact_match": 0,
-                "rouge_scores": {},
-                "error": str(e)
-            })
-    
-    # 计算和聚合指标
-    qa_stats = aggregate_qa_metrics(results, exact_matches, rouges, len(questions))
-    return qa_stats
-
-# 提取问答数据的辅助函数
-def extract_qa_data(qa_dataset, num_samples):
-    """从不同格式的数据集中提取问题和答案对"""
-    questions = []
-    answers = []
-    
-    if isinstance(qa_dataset, Dataset):
-        if "question" in qa_dataset.column_names and "answer" in qa_dataset.column_names:
-            questions = qa_dataset["question"]
-            answers = qa_dataset["answer"]
-        elif "question" in qa_dataset.column_names and "answers" in qa_dataset.column_names:
-            questions = qa_dataset["question"]
-            answers = [a[0] if isinstance(a, list) else a for a in qa_dataset["answers"]]
-        elif "context" in qa_dataset.column_names and "question" in qa_dataset.column_names:
-            questions = [f"上下文: {c}\n问题: {q}" for c, q in zip(qa_dataset["context"], qa_dataset["question"])]
-            if "answers" in qa_dataset.column_names:
-                answers = [a["text"][0] if isinstance(a, dict) and "text" in a else a for a in qa_dataset["answers"]]
-            elif "answer" in qa_dataset.column_names:
-                answers = qa_dataset["answer"]
-    elif isinstance(qa_dataset, list) and len(qa_dataset) > 0:
-        if "question" in qa_dataset[0] and "answer" in qa_dataset[0]:
-            questions = [item["question"] for item in qa_dataset]
-            answers = [item["answer"] for item in qa_dataset]
-    
-    # 限制样本数量
-    if num_samples > 0 and num_samples < len(questions):
-        questions = questions[:num_samples]
-        answers = answers[:num_samples]
+            logger.error(f"生成答案时出错: {e}")
+            generated_answer = ""
         
-    return questions, answers
-
-# 聚合问答指标的辅助函数
-def aggregate_qa_metrics(results, exact_matches, rouges, total_questions):
-    """聚合问答评估指标"""
-    # 计算平均值
-    exact_match_acc = exact_matches / total_questions if total_questions else 0
+        # 精确匹配评估
+        exact_match = generated_answer.lower() == expected_answer.lower()
+        if exact_match:
+            correct_samples += 1
+        
+        # 计算ROUGE分数
+        try:
+            rouge_scores = scorer.score(expected_answer, generated_answer)
+            rouge_1_score = rouge_scores['rouge1'].fmeasure
+            rouge_2_score = rouge_scores['rouge2'].fmeasure
+            rouge_l_score = rouge_scores['rougeL'].fmeasure
+            
+            rouge_1_sum += rouge_1_score
+            rouge_2_sum += rouge_2_score
+            rouge_l_sum += rouge_l_score
+        except Exception as e:
+            logger.error(f"计算ROUGE分数时出错: {e}")
+            rouge_scores = {"rouge1": {"f": 0}, "rouge2": {"f": 0}, "rougeL": {"f": 0}}
+            rouge_1_score = rouge_2_score = rouge_l_score = 0
+        
+        # 计算BLEU分数
+        try:
+            # 分词
+            ref_tokens = nltk.word_tokenize(expected_answer.lower())
+            gen_tokens = nltk.word_tokenize(generated_answer.lower())
+            
+            # 使用平滑函数计算BLEU
+            smoothie = SmoothingFunction().method1
+            bleu_score = sentence_bleu([ref_tokens], gen_tokens, smoothing_function=smoothie)
+            bleu_sum += bleu_score
+        except Exception as e:
+            logger.error(f"计算BLEU分数时出错: {e}")
+            bleu_score = 0
+        
+        # 计算METEOR分数（如果可用）
+        if has_meteor and expected_answer and generated_answer:
+            try:
+                meteor_value = meteor_score([expected_answer.split()], generated_answer.split())
+                meteor_sum += meteor_value
+            except Exception as e:
+                logger.error(f"计算METEOR分数时出错: {e}")
+                meteor_value = 0
+        else:
+            meteor_value = 0
+        
+        # 计算BERTScore（如果可用）
+        if has_bertscore and expected_answer and generated_answer:
+            try:
+                # 每20个样本计算一次BERTScore，以提高效率
+                if i % 20 == 0 or i == len(qa_dataset) - 1:
+                    P, R, F1 = bert_score([generated_answer], [expected_answer], lang="zh")
+                    bertscore_value = F1.item()
+                    bertscore_sum += bertscore_value
+                else:
+                    # 使用默认值占位
+                    bertscore_value = 0
+            except Exception as e:
+                logger.error(f"计算BERTScore时出错: {e}")
+                bertscore_value = 0
+        else:
+            bertscore_value = 0
+        
+        # 收集样本数据（包含所有指标）
+        sample = {
+            "question": question,
+            "expected_answer": expected_answer,
+            "generated_answer": generated_answer,
+            "exact_match": exact_match,
+            "rouge_scores": {
+                "rouge-1": {"f": rouge_1_score},
+                "rouge-2": {"f": rouge_2_score},
+                "rouge-l": {"f": rouge_l_score}
+            },
+            "bleu": bleu_score,
+            "meteor": meteor_value,
+            "bertscore": bertscore_value
+        }
+        samples.append(sample)
+        total_samples += 1
     
-    # 聚合ROUGE分数
-    rouge_1_f = np.mean([r["rouge-1"]["f"] for r in rouges]) if rouges else 0
-    rouge_2_f = np.mean([r["rouge-2"]["f"] for r in rouges]) if rouges else 0
-    rouge_l_f = np.mean([r["rouge-l"]["f"] for r in rouges]) if rouges else 0
+    # 计算整体指标
+    exact_match_ratio = correct_samples / total_samples if total_samples > 0 else 0
+    avg_rouge_1 = rouge_1_sum / total_samples if total_samples > 0 else 0
+    avg_rouge_2 = rouge_2_sum / total_samples if total_samples > 0 else 0
+    avg_rouge_l = rouge_l_sum / total_samples if total_samples > 0 else 0
+    avg_bleu = bleu_sum / total_samples if total_samples > 0 else 0
+    avg_meteor = meteor_sum / total_samples if total_samples > 0 else 0
+    avg_bertscore = bertscore_sum / total_samples if total_samples > 0 else 0
     
-    qa_stats = {
-        "exact_match": exact_match_acc,
-        "rouge-1-f": rouge_1_f,
-        "rouge-2-f": rouge_2_f,
-        "rouge-l-f": rouge_l_f,
-        "samples": results
+    # 返回结果，包含所有额外指标
+    return {
+        "exact_match": exact_match_ratio,
+        "rouge-1-f": avg_rouge_1,
+        "rouge-2-f": avg_rouge_2,
+        "rouge-l-f": avg_rouge_l,
+        "bleu": avg_bleu,
+        "meteor": avg_meteor,
+        "bertscore": avg_bertscore,
+        "samples": samples
     }
-    
-    return qa_stats
 
 # 重构评估分类能力函数
 def evaluate_classification(model, tokenizer, classification_dataset, device, args, use_accelerate=False):
@@ -1035,9 +1087,7 @@ def upload_to_wandb(evaluation_results, args, datasets):
     
     # ======= 困惑度任务(perplexity) =======
     if "perplexity" in evaluation_results:
-        # 仅记录平均困惑度
-        avg_ppl = evaluation_results["perplexity"]["avg_perplexity"]
-        wandb.log({"perplexity/avg": avg_ppl})
+        # 不再单独上报平均困惑度
         
         # 上传样本级困惑度数据（同时包含文本内容）
         perplexities = evaluation_results["perplexity"]["per_sample_perplexities"]
@@ -1101,31 +1151,43 @@ def upload_to_wandb(evaluation_results, args, datasets):
     
     # ======= 问答任务(qa) =======
     if "qa" in evaluation_results:
-        # 记录核心指标
-        rouge_l = evaluation_results["qa"]["rouge-l-f"]
-        exact_match = evaluation_results["qa"]["exact_match"]
-        wandb.log({
-            "qa/rouge_l": rouge_l,
-            "qa/exact_match": exact_match
-        })
+        # 不再单独上报平均指标
         
-        # 上传全部问答样本
+        # 上传全部问答样本（包含额外指标）
         samples = evaluation_results["qa"]["samples"]
         if samples:
-            # 为每个样本获取rouge-l指标
+            # 为每个样本获取所有指标
             qa_samples_data = []
             for i, sample in enumerate(samples):
+                # 提取或计算各项指标
                 rouge_l_score = sample.get("rouge_scores", {}).get("rouge-l", {}).get("f", 0)
+                rouge_1_score = sample.get("rouge_scores", {}).get("rouge-1", {}).get("f", 0)
+                rouge_2_score = sample.get("rouge_scores", {}).get("rouge-2", {}).get("f", 0)
+                bleu_score = sample.get("bleu", 0)
+                meteor_score = sample.get("meteor", 0)
+                bertscore_value = sample.get("bertscore", 0)
+                
+                # 确保所有指标都是数值类型
                 if not isinstance(rouge_l_score, (int, float)):
                     rouge_l_score = 0
+                if not isinstance(rouge_1_score, (int, float)):
+                    rouge_1_score = 0
+                if not isinstance(rouge_2_score, (int, float)):
+                    rouge_2_score = 0
                 
+                # 构建样本数据行，包含所有指标
                 qa_samples_data.append([
                     i,  # 样本ID
                     sample["question"],
                     sample["expected_answer"],
                     sample["generated_answer"],
                     sample["exact_match"],
-                    round(rouge_l_score, 4)
+                    round(rouge_1_score, 4),
+                    round(rouge_2_score, 4), 
+                    round(rouge_l_score, 4),
+                    round(bleu_score, 4) if isinstance(bleu_score, (int, float)) else 0,
+                    round(meteor_score, 4) if isinstance(meteor_score, (int, float)) else 0,
+                    round(bertscore_value, 4) if isinstance(bertscore_value, (int, float)) else 0,
                 ])
             
             # 取前200个样本避免表格过大
@@ -1134,22 +1196,21 @@ def upload_to_wandb(evaluation_results, args, datasets):
                 step = len(qa_samples_data) // 200
                 qa_samples_data = [qa_samples_data[i] for i in range(0, len(qa_samples_data), step)][:200]
             
+            # 使用新列名上传带有额外指标的QA样本表格
             wandb.log({
                 "qa/samples": wandb.Table(
-                    columns=["样本ID", "问题", "标准答案", "生成答案", "精确匹配", "ROUGE-L"],
+                    columns=[
+                        "样本ID", "问题", "标准答案", "生成答案", "精确匹配", 
+                        "ROUGE-1", "ROUGE-2", "ROUGE-L", "BLEU", 
+                        "METEOR", "BERTScore"
+                    ],
                     data=qa_samples_data
                 )
             })
     
     # ======= 分类任务(classification) =======
     if "classification" in evaluation_results:
-        # 记录核心指标
-        accuracy = evaluation_results["classification"]["accuracy"]
-        f1 = evaluation_results["classification"]["f1"]
-        wandb.log({
-            "classification/accuracy": accuracy,
-            "classification/f1": f1
-        })
+        # 不再单独上报平均指标
         
         # 上传分类样本
         samples = evaluation_results["classification"]["samples"]
@@ -1180,13 +1241,7 @@ def upload_to_wandb(evaluation_results, args, datasets):
     
     # ======= 生成任务(generation) =======
     if "generation" in evaluation_results:
-        # 记录核心指标
-        lexical_diversity = evaluation_results["generation"]["lexical_diversity"]
-        avg_length = evaluation_results["generation"]["avg_length"]
-        wandb.log({
-            "generation/lexical_diversity": lexical_diversity,
-            "generation/avg_length": avg_length
-        })
+        # 不再单独上报平均指标
         
         # 上传生成样本
         samples = evaluation_results["generation"]["generation_samples"]
@@ -1217,24 +1272,67 @@ def upload_to_wandb(evaluation_results, args, datasets):
                 )
             })
     
-    # 创建简洁的摘要表格
+    # ======= 创建综合汇总表格（包含所有平均指标） =======
+    # 创建更详细的汇总表格，包含额外指标
     summary_data = []
+    
+    # 困惑度指标
     if "perplexity" in evaluation_results:
-        summary_data.append(["困惑度(PPL)", f"{evaluation_results['perplexity']['avg_perplexity']:.4f}", len(evaluation_results["perplexity"]["per_sample_perplexities"])])
+        perplexity_metrics = [
+            "困惑度(PPL)", 
+            f"平均: {evaluation_results['perplexity']['avg_perplexity']:.4f}, " +
+            f"中位数: {evaluation_results['perplexity']['median_perplexity']:.4f}, " +
+            f"最小值: {evaluation_results['perplexity']['min_perplexity']:.4f}, " +
+            f"最大值: {evaluation_results['perplexity']['max_perplexity']:.4f}, " +
+            f"标准差: {evaluation_results['perplexity']['perplexity_std']:.4f}",
+            len(evaluation_results["perplexity"]["per_sample_perplexities"])
+        ]
+        summary_data.append(perplexity_metrics)
     
+    # 问答指标
     if "qa" in evaluation_results:
-        summary_data.append(["问答(QA)", f"精确匹配: {evaluation_results['qa']['exact_match']:.4f}, ROUGE-L: {evaluation_results['qa']['rouge-l-f']:.4f}", len(evaluation_results["qa"]["samples"])])
+        qa_metrics = [
+            "问答(QA)",
+            f"精确匹配: {evaluation_results['qa']['exact_match']:.4f}, " +
+            f"ROUGE-L: {evaluation_results['qa']['rouge-l-f']:.4f}, " +
+            f"ROUGE-1: {evaluation_results['qa'].get('rouge-1-f', 0):.4f}, " +
+            f"ROUGE-2: {evaluation_results['qa'].get('rouge-2-f', 0):.4f}, " +
+            f"BLEU: {evaluation_results['qa'].get('bleu', 0):.4f}, " +
+            f"METEOR: {evaluation_results['qa'].get('meteor', 0):.4f}, " +
+            f"BERTScore: {evaluation_results['qa'].get('bertscore', 0):.4f}",
+            len(evaluation_results["qa"]["samples"])
+        ]
+        summary_data.append(qa_metrics)
     
+    # 分类指标
     if "classification" in evaluation_results:
-        summary_data.append(["分类(CLS)", f"准确率: {evaluation_results['classification']['accuracy']:.4f}, F1: {evaluation_results['classification']['f1']:.4f}", len(evaluation_results["classification"]["samples"])])
+        classification_metrics = [
+            "分类(CLS)",
+            f"准确率: {evaluation_results['classification']['accuracy']:.4f}, " +
+            f"F1: {evaluation_results['classification']['f1']:.4f}, " +
+            f"精确率: {evaluation_results['classification']['precision']:.4f}, " +
+            f"召回率: {evaluation_results['classification']['recall']:.4f}",
+            len(evaluation_results["classification"]["samples"])
+        ]
+        summary_data.append(classification_metrics)
     
+    # 生成指标
     if "generation" in evaluation_results:
-        summary_data.append(["生成(GEN)", f"词汇多样性: {evaluation_results['generation']['lexical_diversity']:.4f}, 平均长度: {evaluation_results['generation']['avg_length']:.1f}", len(evaluation_results["generation"]["generation_samples"])])
+        generation_metrics = [
+            "生成(GEN)",
+            f"词汇多样性: {evaluation_results['generation']['lexical_diversity']:.4f}, " +
+            f"平均长度: {evaluation_results['generation']['avg_length']:.1f}, " +
+            f"中位数长度: {evaluation_results['generation']['median_length']:.1f}, " +
+            f"平均不重复词数: {evaluation_results['generation']['avg_unique_words']:.1f}",
+            len(evaluation_results["generation"]["generation_samples"])
+        ]
+        summary_data.append(generation_metrics)
     
+    # 上传汇总表格（包含所有平均指标）
     if summary_data:
         wandb.log({
-            "summary": wandb.Table(
-                columns=["任务", "核心指标", "样本数"],
+            "evaluation_summary": wandb.Table(
+                columns=["任务", "综合指标", "样本数"],
                 data=summary_data
             )
         })
@@ -1242,7 +1340,15 @@ def upload_to_wandb(evaluation_results, args, datasets):
     # 上传原始结果文件
     results_json = os.path.join(args.output_dir, "evaluation_results.json")
     with open(results_json, 'w') as f:
-        json.dump(evaluation_results, f, indent=2)
+        # 过滤掉不可序列化的对象
+        filtered_results = {}
+        for task, result in evaluation_results.items():
+            if task == "perplexity":
+                # 过滤掉可能的无穷值
+                result["per_sample_perplexities"] = [p for p in result["per_sample_perplexities"] if not math.isinf(p)]
+            filtered_results[task] = result
+        
+        json.dump(filtered_results, f, indent=2)
     
     wandb.save(results_json)
     
@@ -1343,7 +1449,7 @@ def run_evaluations(model, tokenizer, datasets, device, args, use_accelerate):
     task_evaluators = {
         "perplexity": lambda: calculate_perplexity(model, tokenizer, datasets["perplexity"], device, args),
         "generation": lambda: evaluate_generation(model, tokenizer, datasets["generation"], device, args, use_accelerate),
-        "qa": lambda: evaluate_qa(model, tokenizer, datasets["qa"], device, args, use_accelerate),
+        "qa": lambda: evaluate_qa(model, tokenizer, datasets["qa"], device, args),
         "classification": lambda: evaluate_classification(model, tokenizer, datasets["classification"], device, args, use_accelerate)
     }
     
