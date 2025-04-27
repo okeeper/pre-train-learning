@@ -131,8 +131,9 @@ python model_evaluation.py \
     --novel_name "亵渎" \
     --qa_dataset ./data/xd_eval_qa2.csv \
     --classification_dataset ./data/xd_eval_classification.json \
+    --single_choice_dataset ./data/xd_eval_choice.csv \
     --output_dir ./output/evaluation_results \
-    --tasks perplexity,qa,classification,generation \
+    --tasks perplexity,qa,classification,generation,single_choice \
     --num_samples -1 \
     --batch_size 16 \
     --fp16 \

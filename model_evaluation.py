@@ -287,6 +287,7 @@ def load_multiple_datasets(dataset_paths_or_names, dataset_split, task_type):
         合并后的数据集
     """
     if not dataset_paths_or_names:
+        logger.warning(f"未提供{task_type}数据集路径，返回None")
         return None
         
     # 分割路径/名称列表
@@ -380,9 +381,9 @@ def load_multiple_datasets(dataset_paths_or_names, dataset_split, task_type):
     if combined_dataset:
         # 记录合并后的数据集大小
         dataset_size = len(combined_dataset) if hasattr(combined_dataset, "__len__") else "未知"
-        logger.info(f"{task_type} 任务最终合并了 {len(paths_or_names)} 个数据源，共 {dataset_size} 个样本")
+        logger.info(f"{task_type} 任务成功合并了 {len(paths_or_names)} 个数据源，共 {dataset_size} 个样本")
     else:
-        logger.warning(f"所有 {task_type} 数据集加载失败")
+        logger.error(f"所有 {task_type} 数据集加载失败，返回None")
     
     return combined_dataset
 
@@ -1576,6 +1577,11 @@ def main():
         datasets["single_choice"] = load_multiple_datasets(
             args.single_choice_dataset, args.dataset_split, "single_choice"
         )
+        # 添加调试信息
+        if datasets["single_choice"] is None:
+            logger.error(f"无法加载单选题数据集: {args.single_choice_dataset}")
+        else:
+            logger.info(f"成功加载单选题数据集，样本数: {len(datasets['single_choice'])}")
     
     # 执行评估任务
     evaluation_results = run_evaluations(model, tokenizer, datasets, device, args, use_accelerate)
@@ -1643,11 +1649,13 @@ def run_evaluations(model, tokenizer, datasets, device, args, use_accelerate):
             logger.warning(f"未找到{task}任务的数据集，跳过评估")
     
     # 添加单选题评估
-    if "single_choice" in tasks and "single_choice" in datasets:
+    if "single_choice" in tasks and "single_choice" in datasets and datasets["single_choice"] is not None:
         logger.info("开始单选题评估...")
         evaluation_results["single_choice"] = evaluate_multiple_choice(
             model, tokenizer, datasets["single_choice"], device, args, use_accelerate
         )
+    else:
+        logger.warning("未找到有效的单选题数据集，跳过单选题评估")
     
     return evaluation_results
 
@@ -1694,20 +1702,20 @@ def save_generated_texts(samples, output_dir):
     logger.info(f"生成文本已保存到 {generations_file}")
 
 def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_accelerate=False):
-    """评估模型在单选题上的表现
-    
-    Args:
-        model: 待评估的语言模型
-        tokenizer: 对应的分词器
-        mc_dataset: 选择题数据集，每个样本应包含问题、选项和正确答案
-        device: 计算设备
-        args: 命令行参数
-        use_accelerate: 是否使用Accelerate进行加速
-        
-    Returns:
-        包含评估结果的字典
-    """
+    """评估模型在单选题上的表现"""
     logger.info("正在评估单选题能力...")
+    
+    # 添加数据集检查
+    if mc_dataset is None:
+        logger.error("单选题数据集为空，无法进行评估")
+        return {
+            "accuracy": 0,
+            "option_accuracy": 0,
+            "option_accuracies": {},
+            "answer_distribution": {},
+            "samples": [],
+            "error": "数据集为空"
+        }
     
     total_samples = 0
     correct_samples = 0
