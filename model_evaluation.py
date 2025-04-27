@@ -159,6 +159,13 @@ def parse_args():
         action="store_true", 
         help="保存模型生成的文本到文件"
     )
+
+    parser.add_argument(
+        "--novel_name", 
+        type=str,
+        default=None,
+        help="小说名称"
+    )
     
     args = parser.parse_args()
     return args
@@ -725,7 +732,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             question, expected_answer = item
         
         # 生成答案
-        system_prompt = "你是小说的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。"
+        system_prompt = f"你是小说《{args.novel_name}》的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。"
         generated_answer = generate_with_qwen_format(
             model=model,
             tokenizer=tokenizer,

@@ -128,6 +128,7 @@ python test_chat.py --model_path /path/to/your/model --lora_path /path/to/your/l
 python model_evaluation.py \
     --model_path output/qwen_novel_pretrain_knowledge \
     --perplexity_dataset data/xd_eval_preplexity.txt \
+    --novel_name "亵渎"
     --qa_dataset ./data/xd_eval_qa2.csv \
     --classification_dataset ./data/xd_eval_classification.json \
     --output_dir ./output/evaluation_results \
