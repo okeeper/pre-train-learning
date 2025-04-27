@@ -453,6 +453,7 @@ def load_file_dataset(file_path, task_type):
             
             # 添加对选择题数据集的支持
             elif task_type == "single_choice":
+                logger.info(f"开始加载单选题数据集 {file_path}  {df.columns}")
                 # 检查是否有必要的列
                 if "question" in df.columns and "answer" in df.columns:
                     # 检查是否有选项列
@@ -877,6 +878,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             },
             "bleu": bleu_score
         }
+        logger.info(f"样本 {i} 评估结果: {sample}")
         samples.append(sample)
     
     # 计算平均指标
