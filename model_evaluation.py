@@ -28,6 +28,7 @@ from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from nltk.translate.meteor_score import meteor_score
 from bert_score import score as bert_score
 from rouge_score import rouge_scorer
+from rouge_score import tokenizers
 import sys
 
 # 设置NLTK数据目录到已下载位置
@@ -768,13 +769,8 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
     """使用标准方法的问答评估函数"""
     logger.info("正在评估问答(QA)任务...")
     
-    # 使用标准 rouge_scorer，但为中文添加特殊处理
-    from rouge_score import rouge_scorer
-    # 创建自定义分词器，用于处理中文文本
-    from rouge_score import tokenizers
-    
-    # 自定义中文分词处理函数
-    def chinese_tokenizer(text):
+    # 使用字符级分词作为简单的分词方法
+    def chinese_tokenize_text(text):
         # 检查是否包含中文
         has_chinese = any('\u4e00' <= char <= '\u9fff' for char in text)
         if has_chinese:
@@ -783,17 +779,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         else:
             # 非中文文本使用默认分词
             return text.split()
-    
-    # 使用自定义分词处理中文
-    class ChineseTokenizer(tokenizers.TokenizerBase):
-        def tokenize(self, text):
-            return chinese_tokenizer(text)
-    
-    # 创建使用中文分词的评分器
-    scorer = rouge_scorer.RougeScorer(
-        ['rouge1', 'rouge2', 'rougeL'], 
-        tokenizer=ChineseTokenizer()
-    )
     
     # 初始化指标统计
     metrics_sum = {
@@ -830,7 +815,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             do_sample=False   # 贪婪解码
         ).strip()
         
-        
         # 1. 精确匹配评估
         exact_match = generated_answer.lower() == expected_answer.lower()
         if exact_match:
@@ -859,8 +843,14 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                         "rougeL": {"f": 1.0}
                     }
                 else:
-                    # 使用标准 ROUGE 计算
-                    raw_scores = scorer.score(expected_answer, generated_answer)
+                    # 使用标准 ROUGE 计算 - 使用默认评分器，针对中文预处理文本
+                    # 预处理：字符级分割中文文本
+                    expected_tokens = ' '.join(chinese_tokenize_text(expected_answer))
+                    generated_tokens = ' '.join(chinese_tokenize_text(generated_answer))
+                    
+                    # 使用默认评分器
+                    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=False)
+                    raw_scores = scorer.score(expected_tokens, generated_tokens)
                     
                     # 正确地提取 Score 对象的 f-measure
                     rouge_scores = {
@@ -873,6 +863,8 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                     logger.info(f"样本 {i} - ROUGE计算详情:")
                     logger.info(f"  预期: '{expected_answer}'")
                     logger.info(f"  生成: '{generated_answer}'")
+                    logger.info(f"  分词后预期: '{expected_tokens}'")
+                    logger.info(f"  分词后生成: '{generated_tokens}'")
                     logger.info(f"  原始ROUGE对象: {raw_scores}")
                     logger.info(f"  提取后的分数: {rouge_scores}")
                     
