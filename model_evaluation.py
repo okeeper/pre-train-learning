@@ -791,7 +791,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             logger.info(f"样本 {i}:\n问题: {question}\n参考答案: {expected_answer}")
         
         # 使用更适合中文QA的系统提示
-        system_prompt = f"你是一个小说阅读助手，正在阅读小说《{args.novel_name}》。请根据小说内容直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
+        system_prompt = f"你是一个小说阅读助手。请根据小说内容直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
         
         # 生成答案
         generated_answer = generate_with_qwen_format(
@@ -847,13 +847,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             except Exception as e:
                 logger.error(f"计算 ROUGE 分数时出错: {e}")
         
-        # 调试输出
-        if i < 3 or expected_answer == generated_answer:
-            logger.info(f"样本 {i} - ROUGE分数:")
-            logger.info(f"  ROUGE-1: {rouge_scores['rouge1']['f']:.4f}")
-            logger.info(f"  ROUGE-2: {rouge_scores['rouge2']['f']:.4f}")
-            logger.info(f"  ROUGE-L: {rouge_scores['rougeL']['f']:.4f}")
-        
         # 累加 ROUGE 分数
         metrics_sum["rouge_1"] += rouge_scores["rouge1"]["f"]
         metrics_sum["rouge_2"] += rouge_scores["rouge2"]["f"]
@@ -874,6 +867,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             "rouge_scores": rouge_scores,
             "bleu": bleu_score
         }
+        logger.info(f"样本 {i} - 精确匹配: {sample}")
         samples.append(sample)
     
     # 计算平均指标
@@ -1293,6 +1287,7 @@ def upload_to_wandb(evaluation_results, args, datasets):
                 if not isinstance(rouge_2_score, (int, float)):
                     rouge_2_score = 0
                 
+                logger.info(f"问答任务(qa)wandb上传样本 {i} - 精确匹配: {sample}")
                 # 构建样本数据行，包含所有指标
                 qa_samples_data.append([
                     i,  # 样本ID
@@ -1757,7 +1752,7 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
         prompt += instruction
         
         # 生成答案
-        system_prompt = f"你是一个小说阅读助手，正在阅读小说《{args.novel_name}》。请根据小说内容回答下面单选题，只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
+        system_prompt = f"你是一个小说阅读助手。请根据小说内容回答下面单选题，只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
         try:
             generated_answer = generate_with_qwen_format(
                 model=model,
