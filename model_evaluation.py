@@ -271,6 +271,9 @@ def generate_with_qwen_format(model, tokenizer, prompt, system_prompt, max_new_t
         # 回退到简单解码
         generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
     
+    # 打印输入输出
+    logger.info(f"用户输入: {prompt}")
+    logger.info(f"模型生成: {generated_text}")
     return generated_text
 
 # 加载多个数据集并合并
