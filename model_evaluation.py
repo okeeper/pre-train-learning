@@ -31,10 +31,10 @@ from rouge_score import rouge_scorer
 import sys
 
 # 设置NLTK数据目录到已下载位置
-import nltk
-nltk.data.path.insert(0, "/home/zhangyue/nltk_data")
-logger = logging.getLogger(__name__)
-logger.info(f"已设置NLTK数据路径: {nltk.data.path}")
+# import nltk
+# nltk.data.path.insert(0, "/home/zhangyue/nltk_data")
+# logger = logging.getLogger(__name__)
+# logger.info(f"已设置NLTK数据路径: {nltk.data.path}")
 
 # 配置HuggingFace镜像
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
@@ -760,44 +760,14 @@ def chinese_tokenize(text, use_jieba=True):
         # 非中文文本使用空格分词
         return text.split()
 
-# 自定义的ROUGE评分器，使用jieba分词
-class CustomRougeScorer:
-    """使用jieba分词的自定义ROUGE评分器"""
-    
-    def __init__(self, use_jieba=True):
-        self.use_jieba = use_jieba
-        # 基础ROUGE评分器
-        from rouge_score import rouge_scorer
-        self.base_scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=False)
-    
-    def score(self, target, prediction):
-        """计算ROUGE分数，使用jieba分词预处理"""
-        if not target or not prediction:
-            return {
-                'rouge1': type('obj', (object,), {'precision': 0, 'recall': 0, 'fmeasure': 0}),
-                'rouge2': type('obj', (object,), {'precision': 0, 'recall': 0, 'fmeasure': 0}),
-                'rougeL': type('obj', (object,), {'precision': 0, 'recall': 0, 'fmeasure': 0})
-            }
-        
-        # 检查文本是否包含中文字符
-        has_chinese = any('\u4e00' <= char <= '\u9fff' for char in target + prediction)
-        
-        if has_chinese and self.use_jieba and HAS_JIEBA:
-            # 使用jieba进行分词并重新组合为评分器可处理的格式
-            target_tokens = ' '.join(jieba.cut(target, cut_all=False))
-            prediction_tokens = ' '.join(jieba.cut(prediction, cut_all=False))
-            return self.base_scorer.score(target_tokens, prediction_tokens)
-        else:
-            # 直接使用原始文本
-            return self.base_scorer.score(target, prediction)
-
-# 优化后的QA评估函数
+# 移除自定义的 ROUGE 评分器，使用官方标准方法
 def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
-    """使用jieba分词优化的问答评估函数"""
+    """使用标准方法的问答评估函数"""
     logger.info("正在评估问答(QA)任务...")
     
-    # 使用自定义ROUGE评分器
-    scorer = CustomRougeScorer(use_jieba=True)
+    # 使用标准 rouge_scorer
+    from rouge_score import rouge_scorer
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=False)
     
     # 初始化指标统计
     metrics_sum = {
@@ -807,7 +777,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
     }
     samples = []
     
-    # 调试前几个样本
+    # 评估每个样本
     for i, item in enumerate(tqdm(qa_dataset, desc="评估QA")):
         # 提取问题和答案
         if isinstance(item, dict):
@@ -819,8 +789,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         # 输出前几个样本的详细信息
         if i < 3:
             logger.info(f"样本 {i}:\n问题: {question}\n参考答案: {expected_answer}")
-            # 显示分词结果
-            logger.info(f"参考答案分词: {' | '.join(chinese_tokenize(expected_answer))}")
         
         # 使用更适合中文QA的系统提示
         system_prompt = "你是一个专业的中文问答助手。请直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
@@ -838,7 +806,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         
         if i < 3:
             logger.info(f"生成答案: {generated_answer}")
-            logger.info(f"生成答案分词: {' | '.join(chinese_tokenize(generated_answer))}")
         
         # 1. 精确匹配评估
         exact_match = generated_answer.lower() == expected_answer.lower()
@@ -853,14 +820,47 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         word_match = calculate_word_match(expected_answer, generated_answer)
         metrics_sum["word_match"] += word_match
         
-        # 4. ROUGE评分（使用jieba分词优化）
-        rouge_scores = scorer.score(expected_answer, generated_answer)
-        metrics_sum["rouge_1"] += rouge_scores["rouge1"].fmeasure
-        metrics_sum["rouge_2"] += rouge_scores["rouge2"].fmeasure
-        metrics_sum["rouge_l"] += rouge_scores["rougeL"].fmeasure
+        # 4. ROUGE评分 - 使用标准方法
+        # 对于空字符串，避免 ROUGE 计算错误
+        rouge_scores = {"rouge1": {"f": 0}, "rouge2": {"f": 0}, "rougeL": {"f": 0}}
         
-        # 5. BLEU评分（使用jieba分词优化）
-        bleu_score = calculate_bleu_with_jieba(expected_answer, generated_answer)
+        # 当两个文本都不为空时才计算 ROUGE
+        if expected_answer and generated_answer:
+            try:
+                # 在完全匹配的情况下，直接给满分
+                if expected_answer == generated_answer:
+                    rouge_scores = {
+                        "rouge1": {"f": 1.0},
+                        "rouge2": {"f": 1.0},
+                        "rougeL": {"f": 1.0}
+                    }
+                else:
+                    # 使用标准 ROUGE 计算
+                    rouge_scores = scorer.score(expected_answer, generated_answer)
+                    
+                    # 将 ROUGE 对象转换为简单字典
+                    rouge_scores = {
+                        "rouge1": {"f": rouge_scores["rouge1"].fmeasure},
+                        "rouge2": {"f": rouge_scores["rouge2"].fmeasure},
+                        "rougeL": {"f": rouge_scores["rougeL"].fmeasure}
+                    }
+            except Exception as e:
+                logger.error(f"计算 ROUGE 分数时出错: {e}")
+        
+        # 调试输出
+        if i < 3 or expected_answer == generated_answer:
+            logger.info(f"样本 {i} - ROUGE分数:")
+            logger.info(f"  ROUGE-1: {rouge_scores['rouge1']['f']:.4f}")
+            logger.info(f"  ROUGE-2: {rouge_scores['rouge2']['f']:.4f}")
+            logger.info(f"  ROUGE-L: {rouge_scores['rougeL']['f']:.4f}")
+        
+        # 累加 ROUGE 分数
+        metrics_sum["rouge_1"] += rouge_scores["rouge1"]["f"]
+        metrics_sum["rouge_2"] += rouge_scores["rouge2"]["f"]
+        metrics_sum["rouge_l"] += rouge_scores["rougeL"]["f"]
+        
+        # 5. BLEU评分
+        bleu_score = calculate_bleu(expected_answer, generated_answer)
         metrics_sum["bleu"] += bleu_score
         
         # 收集样本数据
@@ -870,15 +870,10 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             "generated_answer": generated_answer,
             "exact_match": exact_match,
             "char_match": char_match,
-            "word_match": word_match,  # 添加词级匹配
-            "rouge_scores": {
-                "rouge-1": {"f": rouge_scores['rouge1'].fmeasure},
-                "rouge-2": {"f": rouge_scores['rouge2'].fmeasure},
-                "rouge-l": {"f": rouge_scores['rougeL'].fmeasure}
-            },
+            "word_match": word_match,
+            "rouge_scores": rouge_scores,
             "bleu": bleu_score
         }
-        logger.info(f"样本 {i} 评估结果: {sample}")
         samples.append(sample)
     
     # 计算平均指标
@@ -932,26 +927,35 @@ def calculate_word_match(expected, generated):
     
     return len(common_words) / len(total_words) if total_words else 0
 
-# 基于jieba分词的BLEU计算
-def calculate_bleu_with_jieba(expected, generated):
-    """使用jieba分词计算BLEU分数"""
+# 标准的 BLEU 计算函数，不依赖于特定语言分词
+def calculate_bleu(expected, generated):
+    """计算 BLEU 分数，支持多语言"""
     if not expected or not generated:
         return 0
     
-    # 分词
-    ref_tokens = chinese_tokenize(expected, use_jieba=True)
-    gen_tokens = chinese_tokenize(generated, use_jieba=True)
+    # 使用简单空格分词方式处理英文，字符级处理中文
+    # 检查是否包含中文
+    has_chinese = any('\u4e00' <= char <= '\u9fff' for char in expected + generated)
+    
+    if has_chinese and HAS_JIEBA:  # 针对中文使用 jieba
+        ref_tokens = list(jieba.cut(expected, cut_all=False))
+        gen_tokens = list(jieba.cut(generated, cut_all=False))
+    elif has_chinese:  # 针对中文但没有jieba
+        ref_tokens = list(expected)  # 字符级
+        gen_tokens = list(generated)
+    else:  # 针对英文等其他语言
+        ref_tokens = expected.split()
+        gen_tokens = generated.split()
     
     if not ref_tokens or not gen_tokens:
         return 0
     
-    # 使用平滑函数计算BLEU
-    from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
-    smoothie = SmoothingFunction().method1
+    # 使用平滑函数计算 BLEU
     try:
+        smoothie = SmoothingFunction().method1
         return sentence_bleu([ref_tokens], gen_tokens, smoothing_function=smoothie)
     except Exception as e:
-        logger.error(f"计算BLEU分数时出错: {e}")
+        logger.error(f"计算 BLEU 分数时出错: {e}")
         return 0
 
 # 重构评估分类能力函数
