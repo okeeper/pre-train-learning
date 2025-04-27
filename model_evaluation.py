@@ -859,15 +859,6 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                         "rougeL": {"f": raw_scores["rougeL"].fmeasure}
                     }
                     
-                    # 添加调试输出
-                    logger.info(f"样本 {i} - ROUGE计算详情:")
-                    logger.info(f"  预期: '{expected_answer}'")
-                    logger.info(f"  生成: '{generated_answer}'")
-                    logger.info(f"  分词后预期: '{expected_tokens}'")
-                    logger.info(f"  分词后生成: '{generated_tokens}'")
-                    logger.info(f"  原始ROUGE对象: {raw_scores}")
-                    logger.info(f"  提取后的分数: {rouge_scores}")
-                    
                     # 额外检查 - 如果所有分数都是0但文本有明显重叠
                     if (rouge_scores["rouge1"]["f"] == 0 and 
                         rouge_scores["rouge2"]["f"] == 0 and 
@@ -914,7 +905,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             "bleu": bleu_score
         }
         
-        logger.info(f"样本 {i} - 质量指标: {sample}")
+        # logger.info(f"样本 {i} - 质量指标: {sample}")
         samples.append(sample)
     
     # 计算平均指标
