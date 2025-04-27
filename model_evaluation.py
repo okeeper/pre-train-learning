@@ -151,7 +151,7 @@ def parse_args():
     parser.add_argument(
         "--tasks",
         type=str,
-        default="perplexity,generation,qa,classification",
+        default="perplexity,generation,qa,classification,single_choice",
         help="要执行的评估任务，用逗号分隔",
     )
     parser.add_argument(
@@ -176,6 +176,10 @@ def parse_args():
         default=None,
         help="小说名称"
     )
+    
+    # 添加选择题相关参数
+    parser.add_argument("--single_choice_dataset", type=str, default=None, 
+                        help="用于单选题评估的数据集，支持HuggingFace数据集名称或本地文件路径，多个用逗号分隔")
     
     args = parser.parse_args()
     return args
@@ -445,6 +449,31 @@ def load_file_dataset(file_path, task_type):
             elif task_type == "generation":
                 if "prompt" in df.columns:
                     return df["prompt"].tolist()
+            
+            # 添加对选择题数据集的支持
+            elif task_type == "single_choice":
+                # 检查是否有必要的列
+                if "question" in df.columns and "answer" in df.columns:
+                    # 检查是否有选项列
+                    option_columns = [col for col in df.columns if col in ["A", "B", "C", "D", "E", "F"]]
+                    if option_columns:
+                        # 将选择题数据转换为标准格式
+                        choice_data = []
+                        for _, row in df.iterrows():
+                            # 创建选项字典
+                            options = {}
+                            for opt in option_columns:
+                                if pd.notna(row[opt]):  # 确保选项不是NaN
+                                    options[opt] = str(row[opt])
+                            
+                            choice_data.append({
+                                "question": row["question"],
+                                "answer": row["answer"],
+                                "options": options
+                            })
+                        return choice_data
+                logger.warning(f"CSV文件 {file_path} 不包含必要的选择题列")
+                return None
             
             logger.warning(f"CSV文件 {file_path} 不包含 {task_type} 任务所需的列")
             return None
@@ -1434,6 +1463,63 @@ def upload_to_wandb(evaluation_results, args, datasets):
     
     wandb.save(results_json)
     
+    # 上传选择题评估结果
+    if "single_choice" in evaluation_results:
+        # 仅上传样本数据
+        sc_results = evaluation_results["single_choice"]
+        samples = sc_results["samples"]
+        
+        if samples:
+            # 准备单选题样本数据
+            sc_samples_data = []
+            for i, sample in enumerate(samples):
+                sc_samples_data.append([
+                    i,                          # 样本ID
+                    sample["question"],         # 问题
+                    sample["options"],          # 选项
+                    sample["correct_answer"],   # 正确答案
+                    sample["generated_answer"], # 生成答案全文
+                    sample["extracted_answer"], # 提取的答案
+                    sample["is_correct"],       # 是否正确
+                    sample["option_correct"]    # 格式是否正确
+                ])
+            
+            # 限制样本数量
+            if len(sc_samples_data) > 200:
+                step = len(sc_samples_data) // 200
+                sc_samples_data = [sc_samples_data[i] for i in range(0, len(sc_samples_data), step)][:200]
+            
+            # 上传单选题样本表格
+            wandb.log({
+                "single_choice/samples": wandb.Table(
+                    columns=["样本ID", "问题", "选项", "正确答案", "生成答案", "提取答案", "是否正确", "格式正确"],
+                    data=sc_samples_data
+                )
+            })
+            
+            # 创建选项准确率表格
+            option_acc_data = []
+            for option, acc in sc_results["option_accuracies"].items():
+                count = sc_results["answer_distribution"][option]["total"]
+                correct = sc_results["answer_distribution"][option]["correct"]
+                option_acc_data.append([option, acc, count, correct])
+            
+            wandb.log({
+                "single_choice/option_accuracy": wandb.Table(
+                    columns=["选项", "准确率", "样本数", "正确数"],
+                    data=option_acc_data
+                )
+            })
+        
+        # 添加到汇总数据
+        sc_metrics = [
+            "单选题",
+            f"总体准确率: {sc_results['accuracy']:.4f}, " +
+            f"选项识别准确率: {sc_results['option_accuracy']:.4f}",
+            len(sc_results["samples"])
+        ]
+        summary_data.append(sc_metrics)
+    
     # 结束wandb运行
     wandb.finish()
 
@@ -1475,8 +1561,21 @@ def main():
     if model is None:
         return
     
+    # 修改任务描述以包含单选题
+    if "tasks" in args:
+        tasks = args.tasks.split(",")
+    else:
+        tasks = ["perplexity", "generation", "qa", "classification", "single_choice"]
+    
     # 加载数据集
+    logger.info("加载评估数据集...")
     datasets = load_evaluation_datasets(args)
+    
+    # 添加单选题数据集
+    if "single_choice" in tasks and args.single_choice_dataset:
+        datasets["single_choice"] = load_multiple_datasets(
+            args.single_choice_dataset, args.dataset_split, "single_choice"
+        )
     
     # 执行评估任务
     evaluation_results = run_evaluations(model, tokenizer, datasets, device, args, use_accelerate)
@@ -1543,6 +1642,13 @@ def run_evaluations(model, tokenizer, datasets, device, args, use_accelerate):
         else:
             logger.warning(f"未找到{task}任务的数据集，跳过评估")
     
+    # 添加单选题评估
+    if "single_choice" in tasks and "single_choice" in datasets:
+        logger.info("开始单选题评估...")
+        evaluation_results["single_choice"] = evaluate_multiple_choice(
+            model, tokenizer, datasets["single_choice"], device, args, use_accelerate
+        )
+    
     return evaluation_results
 
 # 保存和可视化结果 - 更新调用
@@ -1586,6 +1692,184 @@ def save_generated_texts(samples, output_dir):
             f.write("-" * 50 + "\n")
     
     logger.info(f"生成文本已保存到 {generations_file}")
+
+def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_accelerate=False):
+    """评估模型在单选题上的表现
+    
+    Args:
+        model: 待评估的语言模型
+        tokenizer: 对应的分词器
+        mc_dataset: 选择题数据集，每个样本应包含问题、选项和正确答案
+        device: 计算设备
+        args: 命令行参数
+        use_accelerate: 是否使用Accelerate进行加速
+        
+    Returns:
+        包含评估结果的字典
+    """
+    logger.info("正在评估单选题能力...")
+    
+    total_samples = 0
+    correct_samples = 0
+    option_correct_samples = 0  # 选项格式正确的数量
+    samples = []
+    
+    # 评估每个选择题
+    for i, item in enumerate(tqdm(mc_dataset, desc="评估单选题")):
+        # 提取问题、选项和答案
+        if isinstance(item, dict):
+            question = item.get("question", "")
+            options = item.get("options", {})
+            correct_answer = item.get("answer", "")
+        else:
+            logger.warning(f"样本 {i} 格式不正确，应为字典格式")
+            continue
+            
+        # 处理选项，确保格式正确
+        options_text = ""
+        if isinstance(options, list):
+            # 如果是选项列表，转换为字母标记的选项
+            options_text = "\n".join([f"{chr(65+j)}. {opt}" for j, opt in enumerate(options)])
+        elif isinstance(options, dict):
+            # 对于CSV格式，选项已经是字典格式，直接使用键值对
+            options_text = "\n".join([f"{k}. {v}" for k, v in options.items() if v and not pd.isna(v)])
+        else:
+            # 如果已经是格式化文本，直接使用
+            options_text = str(options)
+            
+        # 构建问题提示，专注于单选题
+        prompt = f"{question}\n\n{options_text}"
+        instruction = "\n\n请从上述选项中选择一个最正确的答案，直接回答选项字母，如'A'。"
+        prompt += instruction
+        
+        # 生成答案
+        system_prompt = f"你是一个小说《{args.model_name}》的阅读专家。请只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
+        try:
+            generated_answer = generate_with_qwen_format(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                max_new_tokens=args.max_length,
+                temperature=0.1,   # 低温度保证选择的确定性
+                do_sample=False    # 使用贪婪解码
+            ).strip()
+            
+            # 记录前几个样本的详细信息作为调试信息
+            if i < 3:
+                logger.info(f"样本 {i}:")
+                logger.info(f"问题: {question}")
+                logger.info(f"选项: {options_text}")
+                logger.info(f"正确答案: {correct_answer}")
+                logger.info(f"生成答案: {generated_answer}")
+        except Exception as e:
+            logger.error(f"生成答案时出错: {e}")
+            generated_answer = ""
+        
+        # 提取生成答案中的选项字母
+        extracted_answer = extract_single_choice(generated_answer)
+        
+        # 评估答案
+        is_correct = extracted_answer.upper() == correct_answer.upper()
+        
+        # 检查选项格式是否正确
+        option_correct = False
+        valid_options = set(options.keys()) if isinstance(options, dict) else set([chr(65+j) for j in range(len(options))])
+        option_correct = extracted_answer.upper() in valid_options
+            
+        if is_correct:
+            correct_samples += 1
+        if option_correct:
+            option_correct_samples += 1
+            
+        # 收集样本结果
+        sample = {
+            "question": question,
+            "options": options_text,
+            "correct_answer": correct_answer,
+            "generated_answer": generated_answer,
+            "extracted_answer": extracted_answer,
+            "is_correct": is_correct,
+            "option_correct": option_correct
+        }
+        samples.append(sample)
+        total_samples += 1
+    
+    # 计算评估指标
+    accuracy = correct_samples / total_samples if total_samples > 0 else 0
+    option_accuracy = option_correct_samples / total_samples if total_samples > 0 else 0
+    
+    # 按选项分析正确率
+    answer_distribution = {}
+    for sample in samples:
+        correct_ans = sample["correct_answer"].upper()
+        if correct_ans not in answer_distribution:
+            answer_distribution[correct_ans] = {"total": 0, "correct": 0}
+        
+        answer_distribution[correct_ans]["total"] += 1
+        if sample["is_correct"]:
+            answer_distribution[correct_ans]["correct"] += 1
+    
+    # 计算每个选项的准确率
+    option_accuracies = {}
+    for option, counts in answer_distribution.items():
+        option_accuracies[option] = counts["correct"] / counts["total"] if counts["total"] > 0 else 0
+    
+    # 整合结果
+    results = {
+        "accuracy": accuracy,
+        "option_accuracy": option_accuracy,
+        "option_accuracies": option_accuracies,
+        "answer_distribution": answer_distribution,
+        "samples": samples
+    }
+    
+    # 输出评估结果
+    logger.info(f"单选题评估结果:")
+    logger.info(f"总体准确率: {accuracy:.4f}")
+    logger.info(f"选项识别准确率: {option_accuracy:.4f}")
+    logger.info(f"各选项准确率: {option_accuracies}")
+    
+    return results
+
+# 专门提取单选题答案的函数
+def extract_single_choice(answer):
+    """从生成的文本中提取单选题答案"""
+    if not answer:
+        return ""
+    
+    import re
+    
+    # 查找明确标出的选项，如"选项A"或"我选A"或"答案是A"
+    option_pattern = r'[选择][项择].*?([A-Z])|[答我]案.*?是.*?([A-Z])|答案[:：][\s]*([A-Z])'
+    matches = re.findall(option_pattern, answer, re.IGNORECASE)
+    
+    if matches:
+        # 合并所有可能的匹配组，取第一个非空值
+        for match_group in matches:
+            for option in match_group:
+                if option:
+                    return option.upper()
+    
+    # 如果没有明确标识，查找文本中的第一个大写字母A-E
+    all_caps = re.findall(r'[A-E]', answer)
+    if all_caps:
+        # 返回第一个选项字母
+        return all_caps[0].upper()
+    
+    # 尝试从文本中提取数字选项
+    digit_pattern = r'选择.*?([1-5])|\b选([1-5])\b|答案.*?([1-5])'
+    digit_matches = re.findall(digit_pattern, answer)
+    
+    if digit_matches:
+        for match_group in digit_matches:
+            for digit in match_group:
+                if digit and digit.isdigit() and 1 <= int(digit) <= 5:
+                    # 将数字转换为对应字母 (1->A, 2->B, etc.)
+                    return chr(64 + int(digit))
+    
+    # 如果所有尝试都失败，返回空字符串
+    return ""
 
 if __name__ == "__main__":
     main() 
