@@ -427,36 +427,7 @@ def load_file_dataset(file_path, task_type):
                 
         elif file_path.endswith('.csv'):
             import pandas as pd
-            try:
-                # 先尝试自动推断分隔符
-                df = pd.read_csv(file_path, sep=None, engine='python')
-            except Exception as e1:
-                logger.warning(f"常规加载失败，尝试带引号处理: {e1}")
-                try:
-                    # 如果失败，尝试使用更宽松的参数
-                    df = pd.read_csv(file_path, 
-                                    sep=',',               # 明确指定逗号分隔符
-                                    engine='python',       # 使用Python解析引擎，更灵活
-                                    quotechar='"',         # 引号字符
-                                    escapechar='\\',       # 转义字符
-                                    on_bad_lines='warn',   # 遇到错误行时发出警告
-                                    quoting=1)             # QUOTE_ALL模式
-                    logger.info(f"使用宽松参数成功加载CSV文件")
-                except Exception as e2:
-                    logger.warning(f"宽松参数加载也失败，尝试跳过错误行: {e2}")
-                    try:
-                        # 最后尝试跳过错误行
-                        df = pd.read_csv(file_path,
-                                        sep=',',
-                                        engine='python',
-                                        quotechar='"',
-                                        escapechar='\\',
-                                        on_bad_lines='skip',  # 跳过错误行
-                                        quoting=1)
-                        logger.info(f"跳过错误行，成功加载CSV文件")
-                    except Exception as e3:
-                        logger.error(f"所有尝试都失败了: {e3}")
-                        return None
+            df = pd.read_csv(file_path)
             
             # 转换为列表格式
             data = df.to_dict('records')
@@ -820,7 +791,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             logger.info(f"样本 {i}:\n问题: {question}\n参考答案: {expected_answer}")
         
         # 使用更适合中文QA的系统提示
-        system_prompt = "你是一个专业的中文问答助手。请直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
+        system_prompt = f"你是一个小说阅读助手，正在阅读小说《{args.novel_name}》。请根据小说内容直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
         
         # 生成答案
         generated_answer = generate_with_qwen_format(
@@ -1786,7 +1757,7 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
         prompt += instruction
         
         # 生成答案
-        system_prompt = f"你是一个小说《{args.model_name}》的阅读专家。请只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
+        system_prompt = f"你是一个小说阅读助手，正在阅读小说《{args.novel_name}》。请根据小说内容回答下面单选题，只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
         try:
             generated_answer = generate_with_qwen_format(
                 model=model,
