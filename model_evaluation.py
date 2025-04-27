@@ -678,7 +678,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
     for question, expected_answer in tqdm(zip(questions, answers), desc="问答评估", total=len(questions)):
         try:
             # 使用公共生成方法
-            system_prompt = "你是小说的阅读专家，请根据小说内容回答,无需回复与提问无关的内容和解释。"
+            system_prompt = "你是小说的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。"
             generated_answer = generate_with_qwen_format(
                 model=model,
                 tokenizer=tokenizer,
@@ -912,104 +912,90 @@ def calculate_classification_metrics(results, predictions, labels, unique_labels
     
     return classification_stats
 
-# 创建可视化结果
-def create_visualizations(evaluation_results, args):
-    logger.info("创建简化版可视化图表...")
+# 创建简化版可视化图表
+def create_visualizations(evaluation_results, args, datasets):
+    logger.info("创建极简版可视化图表...")
     
     # 创建输出目录
     os.makedirs(args.output_dir, exist_ok=True)
     visualizations = {}
     
-    # 困惑度 - 仅保留平均值和分布图
-    if "perplexity" in evaluation_results:
-        perplexities = evaluation_results["perplexity"]["per_sample_perplexities"]
-        plt.figure(figsize=(8, 5))
-        plt.hist(perplexities, bins=20, alpha=0.7, color='#1f77b4')
-        plt.axvline(evaluation_results["perplexity"]["avg_perplexity"], color='r', linestyle='dashed', linewidth=1)
-        plt.title("困惑度分布")
-        plt.xlabel("困惑度")
-        plt.ylabel("样本数")
-        plt.grid(True, alpha=0.3)
-        
-        # 添加平均值标签
-        plt.text(evaluation_results["perplexity"]["avg_perplexity"] * 1.1, 
-                plt.ylim()[1] * 0.9, 
-                f'平均值: {evaluation_results["perplexity"]["avg_perplexity"]:.2f}', 
-                color='red')
-        
-        perplexity_plot_path = os.path.join(args.output_dir, "perplexity_distribution.png")
-        plt.savefig(perplexity_plot_path)
-        plt.close()
-        visualizations["perplexity_distribution"] = perplexity_plot_path
+    # 为所有任务创建单个核心指标图表
+    core_metrics = {}
+    dataset_info = {}
     
-    # 组合所有核心指标到一个图表中
-    summary_metrics = {}
-    
+    # 提取每个任务的核心指标
     if "perplexity" in evaluation_results:
-        summary_metrics["困惑度"] = evaluation_results["perplexity"]["avg_perplexity"]
-        
+        core_metrics["困惑度(PPL)"] = evaluation_results["perplexity"]["avg_perplexity"]
+        dataset_size = len(evaluation_results["perplexity"]["per_sample_perplexities"])
+        dataset_info["困惑度(PPL)"] = f"样本数: {dataset_size}"
+    
     if "qa" in evaluation_results:
-        summary_metrics["问答准确率"] = evaluation_results["qa"]["exact_match"]
-        summary_metrics["ROUGE-L"] = evaluation_results["qa"]["rouge-l-f"]
-        
-    if "classification" in evaluation_results:
-        summary_metrics["分类准确率"] = evaluation_results["classification"]["accuracy"]
-        summary_metrics["F1分数"] = evaluation_results["classification"]["f1"]
+        # 仅保留ROUGE-L指标
+        core_metrics["问答(ROUGE-L)"] = evaluation_results["qa"]["rouge-l-f"]
+        dataset_size = len(evaluation_results["qa"]["samples"])
+        dataset_info["问答(ROUGE-L)"] = f"样本数: {dataset_size}"
     
-    if summary_metrics:
-        # 创建核心指标汇总图
+    if "classification" in evaluation_results:
+        # 仅保留准确率
+        core_metrics["分类(准确率)"] = evaluation_results["classification"]["accuracy"]
+        dataset_size = len(evaluation_results["classification"]["samples"])
+        dataset_info["分类(准确率)"] = f"样本数: {dataset_size}"
+        
+    if "generation" in evaluation_results:
+        # 生成任务使用词汇多样性指标
+        core_metrics["生成(词汇多样性)"] = evaluation_results["generation"]["lexical_diversity"]
+        dataset_size = len(evaluation_results["generation"]["generation_samples"])
+        dataset_info["生成(词汇多样性)"] = f"样本数: {dataset_size}"
+    
+    if core_metrics:
+        # 创建统一的核心指标图
         plt.figure(figsize=(10, 6))
         
         # 分离困惑度和其他指标（因为困惑度通常值较大）
-        metrics_without_perplexity = {k: v for k, v in summary_metrics.items() if k != "困惑度"}
+        ppl_metrics = {k: v for k, v in core_metrics.items() if "困惑度" in k}
+        other_metrics = {k: v for k, v in core_metrics.items() if "困惑度" not in k}
         
-        # 绘制条形图
-        idx = np.arange(len(metrics_without_perplexity))
-        bars = plt.bar(idx, list(metrics_without_perplexity.values()), color='#2ca02c')
-        plt.xticks(idx, list(metrics_without_perplexity.keys()), rotation=0)
-        plt.ylim(0, 1.1)  # 设置y轴范围为0-1适合准确率等指标
-        plt.title("模型性能核心指标")
+        # 绘制非困惑度指标的条形图
+        idx = np.arange(len(other_metrics))
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'][:len(other_metrics)]
+        bars = plt.bar(idx, list(other_metrics.values()), color=colors)
+        plt.xticks(idx, list(other_metrics.keys()), rotation=15)
+        plt.ylim(0, min(1.1, max(list(other_metrics.values())) * 1.2))  # 调整Y轴范围
+        plt.title("模型评估核心指标")
         plt.grid(True, alpha=0.3, axis='y')
         
-        # 添加数值标签
-        for bar in bars:
+        # 添加数值和数据集信息标签
+        for i, bar in enumerate(bars):
+            metric_name = list(other_metrics.keys())[i]
             height = bar.get_height()
             plt.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                    f'{height:.3f}', ha='center', va='bottom')
+                    f'{height:.3f}', ha='center', va='bottom', fontsize=9)
             
-        # 如果有困惑度，添加文本注释
-        if "困惑度" in summary_metrics:
-            plt.figtext(0.5, 0.01, f"困惑度: {summary_metrics['困惑度']:.2f}", 
-                      ha="center", fontsize=12, bbox={"facecolor":"orange", "alpha":0.2, "pad":5})
+            # 在底部添加数据集信息
+            if metric_name in dataset_info:
+                plt.text(bar.get_x() + bar.get_width()/2., -0.05,
+                        dataset_info[metric_name], ha='center', va='top', 
+                        fontsize=8, rotation=15, color='darkblue')
         
-        summary_plot_path = os.path.join(args.output_dir, "performance_summary.png")
-        plt.tight_layout()
+        # 如果有困惑度，添加单独的文本框
+        if ppl_metrics:
+            ppl_key = list(ppl_metrics.keys())[0]
+            ppl_value = ppl_metrics[ppl_key]
+            ppl_dataset = dataset_info.get(ppl_key, "")
+            
+            # 在图表底部添加困惑度文本框
+            bbox_props = dict(boxstyle="round,pad=0.5", fc="lightyellow", ec="orange", alpha=0.7)
+            plt.figtext(0.5, 0.01, 
+                      f"{ppl_key}: {ppl_value:.2f}   {ppl_dataset}", 
+                      ha="center", fontsize=10, bbox=bbox_props)
+        
+        summary_plot_path = os.path.join(args.output_dir, "core_metrics.png")
+        plt.tight_layout(pad=2.0)
+        plt.subplots_adjust(bottom=0.15)  # 为底部文本提供空间
         plt.savefig(summary_plot_path)
         plt.close()
-        visualizations["performance_summary"] = summary_plot_path
-    
-    # 混淆矩阵（如果有分类任务）
-    if "classification" in evaluation_results and evaluation_results["classification"]["confusion_matrix"]:
-        # 仅保留混淆矩阵热图
-        confusion_data = []
-        for true_label, predictions in evaluation_results["classification"]["confusion_matrix"].items():
-            for pred_label, count in predictions.items():
-                confusion_data.append({"True": true_label, "Predicted": pred_label, "Count": count})
-        
-        if confusion_data:
-            confusion_df = pd.DataFrame(confusion_data)
-            confusion_pivot = confusion_df.pivot(index="True", columns="Predicted", values="Count")
-            confusion_pivot = confusion_pivot.fillna(0)
-            
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(confusion_pivot, annot=True, fmt=".0f", cmap="Blues")
-            plt.title("混淆矩阵")
-            plt.tight_layout()
-            
-            confusion_matrix_path = os.path.join(args.output_dir, "confusion_matrix.png")
-            plt.savefig(confusion_matrix_path)
-            plt.close()
-            visualizations["confusion_matrix"] = confusion_matrix_path
+        visualizations["core_metrics"] = summary_plot_path
     
     # 保存可视化信息
     visualizations_json_path = os.path.join(args.output_dir, "visualizations.json")
@@ -1018,9 +1004,9 @@ def create_visualizations(evaluation_results, args):
     
     return visualizations
 
-# 简化版本的wandb上传函数
-def upload_to_wandb(evaluation_results, visualizations, args):
-    logger.info("正在将简化版结果上传到wandb...")
+# 优化wandb上报函数，重点显示采样数据
+def upload_to_wandb(evaluation_results, args, datasets):
+    logger.info("正在将模型评估采样结果上传到wandb...")
     
     # 初始化wandb
     run_name = args.wandb_name or f"eval-{args.model_path.split('/')[-1]}"
@@ -1030,60 +1016,263 @@ def upload_to_wandb(evaluation_results, visualizations, args):
         config=vars(args)
     )
     
-    # 上传结果指标 - 仅保留核心指标
+    # 记录核心评估指标
     metrics = {}
     
-    # 困惑度 - 仅保留平均值
-    if "perplexity" in evaluation_results:
-        metrics["perplexity"] = evaluation_results["perplexity"]["avg_perplexity"]
-        
-        # 上传困惑度分布图
-        if "perplexity_distribution" in visualizations:
-            metrics["perplexity/distribution"] = wandb.Image(visualizations["perplexity_distribution"])
-
-    # 问答能力 - 仅保留准确率和ROUGE-L
+    # 基本信息
+    model_info = {
+        "model_path": args.model_path,
+        "tasks": args.tasks
+    }
+    wandb.config.update(model_info)
+    
+    # 上报问答任务结果
     if "qa" in evaluation_results:
-        metrics["qa/exact_match"] = evaluation_results["qa"]["exact_match"]
         metrics["qa/rouge-l"] = evaluation_results["qa"]["rouge-l-f"]
+        metrics["qa/exact_match"] = evaluation_results["qa"]["exact_match"]
         
-        # 上传问答示例（前5个）
-        qa_examples = []
-        for i, sample in enumerate(evaluation_results["qa"]["samples"][:5]):
-            qa_examples.append([
-                sample["question"],
-                sample["expected_answer"],
-                sample["generated_answer"],
-                sample["exact_match"]
-            ])
-        
-        metrics["qa/examples"] = wandb.Table(
-            columns=["问题", "期望答案", "生成答案", "是否匹配"],
-            data=qa_examples
-        )
-
-    # 分类能力 - 仅保留准确率和F1分数
+        # 上报多个有代表性的问答样本
+        samples = evaluation_results["qa"]["samples"]
+        if samples:
+            # 选择几个典型样本：最佳、中等和最差的样本
+            try:
+                # 按rouge-l分数排序
+                sorted_samples = sorted(
+                    samples, 
+                    key=lambda x: x.get("rouge_scores", {}).get("rouge-l", {}).get("f", 0) 
+                    if isinstance(x.get("rouge_scores", {}), dict) else 0
+                )
+                
+                # 最多选择5个样本展示
+                max_samples = min(5, len(sorted_samples))
+                step_size = max(1, len(sorted_samples) // max_samples)
+                
+                qa_examples = []
+                # 选择分布均匀的样本
+                for i in range(0, len(sorted_samples), step_size):
+                    if len(qa_examples) >= max_samples:
+                        break
+                    sample = sorted_samples[i]
+                    
+                    # 获取rouge-l得分
+                    rouge_l = sample.get("rouge_scores", {}).get("rouge-l", {}).get("f", 0)
+                    if isinstance(rouge_l, float):
+                        rouge_l = f"{rouge_l:.3f}"
+                        
+                    qa_examples.append([
+                        sample["question"],
+                        sample["expected_answer"],
+                        sample["generated_answer"],
+                        sample["exact_match"],
+                        rouge_l
+                    ])
+            except Exception as e:
+                # 如果排序失败，直接选择前几个样本
+                logger.warning(f"样本排序失败: {e}")
+                qa_examples = []
+                for i, sample in enumerate(samples[:max_samples]):
+                    qa_examples.append([
+                        sample["question"],
+                        sample["expected_answer"],
+                        sample["generated_answer"],
+                        sample["exact_match"],
+                        "N/A"
+                    ])
+            
+            metrics["qa/samples"] = wandb.Table(
+                columns=["问题", "标准答案", "模型生成答案", "精确匹配", "ROUGE-L"],
+                data=qa_examples
+            )
+    
+    # 上报分类任务结果
     if "classification" in evaluation_results:
         metrics["classification/accuracy"] = evaluation_results["classification"]["accuracy"]
         metrics["classification/f1"] = evaluation_results["classification"]["f1"]
         
-        # 上传混淆矩阵
-        if "confusion_matrix" in visualizations:
-            metrics["classification/confusion_matrix"] = wandb.Image(visualizations["confusion_matrix"])
+        # 上报分类样本
+        samples = evaluation_results["classification"]["samples"]
+        if samples:
+            # 选择一些典型样本：正确和错误的样本
+            classification_examples = []
+            correct_samples = [s for s in samples if s["correct"] == 1]
+            wrong_samples = [s for s in samples if s["correct"] == 0]
+            
+            # 最多选择6个样本：3个正确，3个错误
+            for i in range(min(3, len(correct_samples))):
+                sample = correct_samples[i]
+                classification_examples.append([
+                    sample["text"][:100] + "..." if len(sample["text"]) > 100 else sample["text"],
+                    sample["true_label"],
+                    sample["predicted_label"],
+                    "✓" if sample["correct"] else "✗"
+                ])
+            
+            for i in range(min(3, len(wrong_samples))):
+                sample = wrong_samples[i]
+                classification_examples.append([
+                    sample["text"][:100] + "..." if len(sample["text"]) > 100 else sample["text"],
+                    sample["true_label"],
+                    sample["predicted_label"],
+                    "✓" if sample["correct"] else "✗"
+                ])
+            
+            metrics["classification/samples"] = wandb.Table(
+                columns=["文本", "真实标签", "预测标签", "是否正确"],
+                data=classification_examples
+            )
+            
+            # 尝试上报混淆矩阵
+            if "confusion_matrix" in evaluation_results["classification"]:
+                confusion_data = []
+                for true_label, predictions in evaluation_results["classification"]["confusion_matrix"].items():
+                    for pred_label, count in predictions.items():
+                        confusion_data.append({"真实标签": true_label, "预测标签": pred_label, "数量": count})
+                
+                if confusion_data:
+                    confusion_df = pd.DataFrame(confusion_data)
+                    metrics["classification/confusion_matrix"] = wandb.Table(
+                        dataframe=confusion_df
+                    )
     
-    # 添加性能总结图
-    if "performance_summary" in visualizations:
-        metrics["summary"] = wandb.Image(visualizations["performance_summary"])
-
-    # 记录所有核心指标
+    # 上报困惑度评估结果
+    if "perplexity" in evaluation_results:
+        metrics["perplexity/avg"] = evaluation_results["perplexity"]["avg_perplexity"]
+        
+        # 上报困惑度分布直方图
+        perplexities = evaluation_results["perplexity"]["per_sample_perplexities"]
+        if perplexities:
+            # 过滤掉无穷值
+            valid_perplexities = [p for p in perplexities if not math.isinf(p)]
+            if valid_perplexities:
+                # 上报困惑度直方图
+                metrics["perplexity/distribution"] = wandb.Histogram(valid_perplexities)
+    
+    # 上报生成能力评估结果
+    if "generation" in evaluation_results:
+        metrics["generation/lexical_diversity"] = evaluation_results["generation"]["lexical_diversity"]
+        metrics["generation/avg_length"] = evaluation_results["generation"]["avg_length"]
+        
+        # 上报生成样本
+        samples = evaluation_results["generation"]["generation_samples"]
+        if samples:
+            # 选择几个典型样本：最长、中等长度和最短的样本
+            try:
+                # 按长度排序
+                sorted_samples = sorted(samples, key=lambda x: x["length"])
+                
+                # 最多选择5个样本
+                max_samples = min(5, len(sorted_samples))
+                step_size = max(1, len(sorted_samples) // max_samples)
+                
+                generation_examples = []
+                # 选择分布均匀的样本
+                for i in range(0, len(sorted_samples), step_size):
+                    if len(generation_examples) >= max_samples:
+                        break
+                    sample = sorted_samples[i]
+                    generation_examples.append([
+                        sample["prompt"],
+                        sample["generated_text"],
+                        sample["length"],
+                        sample["unique_words"] / sample["length"] if sample["length"] > 0 else 0
+                    ])
+            except Exception as e:
+                # 如果排序失败，直接选择前几个样本
+                logger.warning(f"样本排序失败: {e}")
+                generation_examples = []
+                for i, sample in enumerate(samples[:max_samples]):
+                    generation_examples.append([
+                        sample["prompt"],
+                        sample["generated_text"],
+                        sample["length"],
+                        sample["unique_words"] / sample["length"] if sample["length"] > 0 else 0
+                    ])
+            
+            metrics["generation/samples"] = wandb.Table(
+                columns=["提示", "生成文本", "长度", "词汇多样性"],
+                data=generation_examples
+            )
+    
+    # 创建核心指标摘要
+    task_counts = {}
+    for task in ["qa", "classification", "perplexity", "generation"]:
+        if task in evaluation_results:
+            if task == "qa":
+                task_counts[task] = len(evaluation_results[task]["samples"])
+            elif task == "classification":
+                task_counts[task] = len(evaluation_results[task]["samples"])
+            elif task == "perplexity":
+                task_counts[task] = len(evaluation_results[task]["per_sample_perplexities"])
+            elif task == "generation":
+                task_counts[task] = len(evaluation_results[task]["generation_samples"])
+    
+    summary_text = f"<h3>模型评估结果: {args.model_path}</h3><br>"
+    summary_text += "<table style='width:100%; border:1px solid #ddd;'>"
+    summary_text += "<tr style='background-color:#f8f8f8;'><th>任务</th><th>核心指标</th><th>样本数</th></tr>"
+    
+    if "perplexity" in evaluation_results:
+        ppl = evaluation_results["perplexity"]["avg_perplexity"]
+        summary_text += f"<tr><td>困惑度</td><td>{ppl:.3f}</td><td>{task_counts.get('perplexity', 'N/A')}</td></tr>"
+    
+    if "qa" in evaluation_results:
+        rouge_l = evaluation_results["qa"]["rouge-l-f"]
+        exact_match = evaluation_results["qa"]["exact_match"]
+        summary_text += f"<tr><td>问答</td><td>ROUGE-L: {rouge_l:.3f}<br>精确匹配: {exact_match:.3f}</td><td>{task_counts.get('qa', 'N/A')}</td></tr>"
+    
+    if "classification" in evaluation_results:
+        acc = evaluation_results["classification"]["accuracy"]
+        f1 = evaluation_results["classification"]["f1"]
+        summary_text += f"<tr><td>分类</td><td>准确率: {acc:.3f}<br>F1分数: {f1:.3f}</td><td>{task_counts.get('classification', 'N/A')}</td></tr>"
+    
+    if "generation" in evaluation_results:
+        lex_div = evaluation_results["generation"]["lexical_diversity"]
+        avg_len = evaluation_results["generation"]["avg_length"]
+        summary_text += f"<tr><td>生成</td><td>词汇多样性: {lex_div:.3f}<br>平均长度: {avg_len:.1f}</td><td>{task_counts.get('generation', 'N/A')}</td></tr>"
+    
+    summary_text += "</table>"
+    
+    # 添加摘要 HTML
+    metrics["summary"] = wandb.Html(summary_text)
+    
+    # 记录所有指标
     wandb.log(metrics)
-
-    # 上传结果文件
+    
+    # 上传原始结果文件
     results_json = os.path.join(args.output_dir, "evaluation_results.json")
     with open(results_json, 'w') as f:
         json.dump(evaluation_results, f, indent=2)
-
+    
+    wandb.save(results_json)
+    
     # 结束wandb运行
     wandb.finish()
+
+# 修复后的保存评估结果函数
+def save_evaluation_results(evaluation_results, args, datasets):
+    """仅保存评估结果JSON，不创建可视化"""
+    # 保存评估结果
+    results_file = os.path.join(args.output_dir, "evaluation_results.json")
+    with open(results_file, 'w', encoding='utf-8') as f:
+        # 过滤掉不可序列化的对象
+        filtered_results = {}
+        for task, result in evaluation_results.items():
+            if task == "perplexity":
+                # 过滤掉可能的无穷值
+                result["per_sample_perplexities"] = [p for p in result["per_sample_perplexities"] if not math.isinf(p)]
+            filtered_results[task] = result
+        
+        json.dump(filtered_results, f, ensure_ascii=False, indent=2)
+    
+    logger.info(f"评估结果已保存到 {results_file}")
+    
+    # 如果启用wandb，直接上传结果
+    if args.use_wandb:
+        upload_to_wandb(evaluation_results, args, datasets)
+        logger.info("结果已上传到wandb")
+    
+    # 保存生成文本示例（如果需要）
+    if args.save_generations and "generation" in evaluation_results:
+        save_generated_texts(evaluation_results["generation"]["generation_samples"], args.output_dir)
 
 def main():
     args = parse_args()
@@ -1102,8 +1291,8 @@ def main():
     # 执行评估任务
     evaluation_results = run_evaluations(model, tokenizer, datasets, device, args, use_accelerate)
     
-    # 保存和可视化结果
-    save_and_visualize_results(evaluation_results, args)
+    # 仅保存结果，不创建本地可视化
+    save_evaluation_results(evaluation_results, args, datasets)
     
     logger.info("评估完成!")
 
@@ -1166,8 +1355,8 @@ def run_evaluations(model, tokenizer, datasets, device, args, use_accelerate):
     
     return evaluation_results
 
-# 保存和可视化结果
-def save_and_visualize_results(evaluation_results, args):
+# 保存和可视化结果 - 更新调用
+def save_and_visualize_results(evaluation_results, args, datasets):
     """保存评估结果并创建可视化"""
     # 保存评估结果
     results_file = os.path.join(args.output_dir, "evaluation_results.json")
@@ -1185,11 +1374,11 @@ def save_and_visualize_results(evaluation_results, args):
     logger.info(f"评估结果已保存到 {results_file}")
     
     # 创建可视化
-    visualizations = create_visualizations(evaluation_results, args)
+    visualizations = create_visualizations(evaluation_results, args, datasets)
     
     # 如果启用wandb，上传结果
     if args.use_wandb:
-        upload_to_wandb(evaluation_results, visualizations, args)
+        upload_to_wandb(evaluation_results, args, datasets)
         logger.info("结果已上传到wandb")
     
     # 保存生成文本示例
