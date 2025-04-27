@@ -29,6 +29,14 @@ from nltk.translate.meteor_score import meteor_score
 from bert_score import score as bert_score
 from rouge_score import rouge_scorer
 
+# 设置HuggingFace国内镜像
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+# 或者可以尝试其他镜像
+# os.environ["HF_ENDPOINT"] = "https://mirror.baai.ac.cn/huggingface"
+
+# 设置PyTorch镜像（可选，如果需要下载模型权重）
+# os.environ["TORCH_HOME"] = "/path/to/torch/cache"
+
 # 设置日志
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -689,12 +697,34 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         has_meteor = False
         logger.warning("NLTK wordnet或meteor_score不可用，无法计算METEOR分数")
     
-    # 尝试导入BERTScore（如果可用）
+    # 初始化BERTScore可用性标志，默认为False
+    has_bertscore = False
+    bertscore_connection_error = False
+    
+    # 预先检查BERTScore是否可用，避免在循环中多次尝试
     try:
         from bert_score import score as bert_score
-        has_bertscore = True
+        # 尝试用一个非常短的测试用例验证连接
+        try:
+            # 使用更小的模型和缓存选项
+            _, _, _ = bert_score(
+                ["测试"], ["测试"], 
+                lang="zh", 
+                model_type="distilbert-base-multilingual-cased",
+                use_fast_tokenizer=True,
+                cache_dir="./hf_cache",  # 添加本地缓存目录
+                verbose=False
+            )
+            has_bertscore = True
+            logger.info("BERTScore连接测试成功，将计算BERTScore")
+        except Exception as e:
+            if "connect to 'https://huggingface.co'" in str(e):
+                bertscore_connection_error = True
+                logger.warning(f"即使使用镜像仍无法连接到HuggingFace，BERTScore将被禁用: {e}")
+                logger.warning("请尝试手动下载模型到本地，或者跳过BERTScore评估")
+            else:
+                logger.warning(f"BERTScore初始化错误，将被禁用: {e}")
     except ImportError:
-        has_bertscore = False
         logger.warning("bert_score库不可用，无法计算BERTScore")
     
     from rouge_score import rouge_scorer
@@ -759,7 +789,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             rouge_scores = {"rouge1": {"f": 0}, "rouge2": {"f": 0}, "rougeL": {"f": 0}}
             rouge_1_score = rouge_2_score = rouge_l_score = 0
         
-        # 计算BLEU分数 - 修改为简单的空格分词，避免使用nltk分词器
+        # 计算BLEU分数 - 使用简单的空格分词
         try:
             # 使用简单的空格分词替代nltk分词器
             ref_tokens = expected_answer.lower().split()
@@ -783,17 +813,32 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             except Exception as e:
                 logger.error(f"计算METEOR分数时出错: {e}")
         
-        # 计算BERTScore（如果可用）
+        # 计算BERTScore（如果可用，且只在没有连接错误的情况下尝试）
         bertscore_value = 0
-        if has_bertscore and expected_answer and generated_answer:
-            try:
-                # 每20个样本计算一次BERTScore，以提高效率
-                if i % 20 == 0 or i == len(qa_dataset) - 1:
-                    P, R, F1 = bert_score([generated_answer], [expected_answer], lang="zh")
+        if has_bertscore and not bertscore_connection_error and expected_answer and generated_answer:
+            # 只对部分样本计算BERTScore以节省时间
+            if i % 5 == 0:
+                try:
+                    # 使用国内可访问的较小多语言模型
+                    P, R, F1 = bert_score(
+                        [generated_answer], 
+                        [expected_answer], 
+                        lang="zh", 
+                        model_type="distilbert-base-multilingual-cased",  # 小型多语言模型
+                        rescale_with_baseline=False,  # 关闭基线重缩放
+                        use_fast_tokenizer=True,      # 使用快速分词器
+                        cache_dir="./hf_cache",       # 本地缓存目录
+                        verbose=False                 # 减少输出
+                    )
                     bertscore_value = F1.item()
                     bertscore_sum += bertscore_value
-            except Exception as e:
-                logger.error(f"计算BERTScore时出错: {e}")
+                except Exception as e:
+                    # 如果出现连接错误，禁用后续BERTScore计算
+                    if "connect to 'https://huggingface.co'" in str(e):
+                        bertscore_connection_error = True
+                        logger.warning(f"禁用BERTScore，因为无法连接HuggingFace: {e}")
+                    else:
+                        logger.error(f"计算BERTScore时出错: {e}")
         
         # 收集样本数据（包含所有可用指标）
         sample = {
@@ -812,7 +857,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         # 只有在实际计算了METEOR和BERTScore时才添加这些字段
         if has_meteor:
             sample["meteor"] = meteor_value
-        if has_bertscore:
+        if has_bertscore and not bertscore_connection_error and i % 5 == 0:
             sample["bertscore"] = bertscore_value
             
         samples.append(sample)
@@ -835,14 +880,17 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         "samples": samples
     }
     
-    # 只在可用时添加METEOR和BERTScore
+    # 只在成功计算了的情况下添加METEOR和BERTScore
     if has_meteor:
         avg_meteor = meteor_sum / total_samples if total_samples > 0 else 0
         results["meteor"] = avg_meteor
         
-    if has_bertscore:
-        avg_bertscore = bertscore_sum / total_samples if total_samples > 0 else 0
-        results["bertscore"] = avg_bertscore
+    if has_bertscore and not bertscore_connection_error:
+        # 计算BERTScore平均值，注意我们只对部分样本计算了
+        bertscore_count = len([s for s in samples if "bertscore" in s])
+        if bertscore_count > 0:
+            avg_bertscore = bertscore_sum / bertscore_count
+            results["bertscore"] = avg_bertscore
     
     return results
 
