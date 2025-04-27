@@ -1487,6 +1487,55 @@ def upload_to_wandb(evaluation_results, args, datasets):
         ]
         summary_data.append(generation_metrics)
     
+    # 添加单选题汇总数据
+    if "single_choice" in evaluation_results:
+        sc_results = evaluation_results["single_choice"]
+        
+        # 基础性能指标
+        overall_acc = sc_results.get('accuracy', 0)
+        option_format_acc = sc_results.get('option_accuracy', 0)
+        
+        # 按选项分类的准确率详情
+        option_acc_details = []
+        total_correct = 0
+        total_samples = 0
+        
+        # 汇总每个选项的准确率数据
+        for option, stats in sc_results.get("answer_distribution", {}).items():
+            option_count = stats.get("total", 0)
+            option_correct = stats.get("correct", 0)
+            option_acc = option_correct / option_count if option_count > 0 else 0
+            
+            # 只展示有数据的选项
+            if option_count > 0:
+                option_acc_details.append(f"{option}:{option_acc:.2f}({option_correct}/{option_count})")
+                total_correct += option_correct
+                total_samples += option_count
+        
+        # 生成整体准确率字符串
+        overall_acc_str = f"{total_correct}/{total_samples}({overall_acc:.4f})" if total_samples > 0 else "无数据"
+        
+        # 构建选项准确率详情字符串
+        option_details = " | ".join(option_acc_details) if option_acc_details else "无详情"
+        
+        # 构建单选题汇总数据 - 分为两部分，基础指标和详细指标
+        sc_basic_metrics = [
+            "单选题-基础",
+            f"总体准确率: {overall_acc_str}, 选项识别率: {option_format_acc:.4f}",
+            len(sc_results.get("samples", []))
+        ]
+        
+        sc_detailed_metrics = [
+            "单选题-详细",
+            f"选项准确率: {option_details}",
+            len(sc_results.get("samples", []))
+        ]
+        
+        # 添加到汇总数据中
+        summary_data.append(sc_basic_metrics)
+        if option_acc_details:  # 只有当有详细数据时才添加
+            summary_data.append(sc_detailed_metrics)
+    
     # 上传汇总表格（包含所有平均指标）
     if summary_data:
         wandb.log({
@@ -1545,19 +1594,6 @@ def upload_to_wandb(evaluation_results, args, datasets):
                 )
             })
             
-            # 创建选项准确率表格
-            option_acc_data = []
-            for option, acc in sc_results["option_accuracies"].items():
-                count = sc_results["answer_distribution"][option]["total"]
-                correct = sc_results["answer_distribution"][option]["correct"]
-                option_acc_data.append([option, acc, count, correct])
-            
-            wandb.log({
-                "single_choice/option_accuracy": wandb.Table(
-                    columns=["选项", "准确率", "样本数", "正确数"],
-                    data=option_acc_data
-                )
-            })
         
         # 添加到汇总数据
         sc_metrics = [

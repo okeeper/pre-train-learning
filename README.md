@@ -130,10 +130,23 @@ python model_evaluation.py \
     --perplexity_dataset data/xd_eval_preplexity.txt \
     --novel_name "亵渎" \
     --qa_dataset ./data/xd_eval_qa2.csv \
-    --classification_dataset ./data/xd_eval_classification.json \
     --single_choice_dataset ./data/xd_eval_choice.csv \
     --output_dir ./output/evaluation_results \
-    --tasks perplexity,qa,classification,generation,single_choice \
+    --tasks perplexity,qa,generation,single_choice \
+    --num_samples -1 \
+    --batch_size 16 \
+    --fp16 \
+    --use_wandb
+
+
+python model_evaluation.py \
+    --model_path Qwen/Qwen2.5-1.5B-Instruct \
+    --perplexity_dataset data/xd_eval_preplexity.txt \
+    --novel_name "亵渎" \
+    --qa_dataset ./data/xd_eval_qa2.csv \
+    --single_choice_dataset ./data/xd_eval_choice.csv \
+    --output_dir ./output/evaluation_results \
+    --tasks perplexity,qa,generation,single_choice \
     --num_samples -1 \
     --batch_size 16 \
     --fp16 \
