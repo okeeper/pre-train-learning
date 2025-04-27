@@ -686,216 +686,131 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
 
 # 重构评估问答能力函数
 def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
+    """评估问答能力（简化版）"""
     logger.info("正在评估问答(QA)任务...")
     
-    # 验证NLTK资源是否可用，而不是尝试下载
-    try:
-        nltk.data.find('tokenizers/punkt')
-        logger.info("已找到NLTK punkt资源")
-    except LookupError:
-        logger.warning("未找到NLTK punkt资源，将使用简单分词方法")
-    
-    # 检查METEOR评分所需资源
+    # 检查必要资源
     has_meteor = False
     try:
         nltk.data.find('corpora/wordnet')
-        from nltk.translate.meteor_score import meteor_score
         has_meteor = True
-        logger.info("已找到NLTK wordnet资源，将计算METEOR分数")
-    except (ImportError, LookupError) as e:
-        logger.warning(f"无法使用METEOR评分: {e}")
+    except LookupError:
+        pass
     
-    # 初始化BERTScore可用性标志，默认为False
+    # 检查BERTScore可用性，使用本地中文模型
     has_bertscore = False
-    bertscore_connection_error = False
-    
-    # 预先检查BERTScore是否可用
+    local_model = "chinese-roberta-wwm-ext"
     try:
-        from bert_score import score as bert_score
-        # 尝试用本地模型验证
-        try:
-            local_model = "chinese-roberta-wwm-ext"  # 使用本地模型
-            
-            # 验证模型可用性
-            _, _, _ = bert_score(
-                ["测试"], ["测试"], 
-                lang="zh", 
-                model_type=local_model,
-                use_fast_tokenizer=True,
-                verbose=False
-            )
-            has_bertscore = True
-            logger.info(f"已使用本地模型 {local_model} 初始化BERTScore")
-        except Exception as e:
-            logger.warning(f"BERTScore初始化错误: {e}")
-    except ImportError:
-        logger.warning("bert_score库不可用，无法计算BERTScore")
-    
-    from rouge_score import rouge_scorer
+        P, R, F1 = bert_score(["测试"], ["测试"], lang="zh", model_type=local_model)
+        has_bertscore = True
+    except:
+        pass
     
     # 初始化ROUGE评分器
-    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=False)
     
-    total_samples = 0
-    correct_samples = 0
-    
-    rouge_1_sum = 0
-    rouge_2_sum = 0
-    rouge_l_sum = 0
-    bleu_sum = 0
-    meteor_sum = 0
-    bertscore_sum = 0
-    
+    # 初始化统计变量
+    metrics_sum = {"rouge_1": 0, "rouge_2": 0, "rouge_l": 0, "bleu": 0, 
+                  "meteor": 0, "bertscore": 0, "correct": 0}
     samples = []
+    bertscore_count = 0
     
-    # 使用tqdm显示进度
+    # 评估每个样本
     for i, item in enumerate(tqdm(qa_dataset, desc="评估QA")):
+        # 提取问题和答案
         if isinstance(item, dict):
             question = item.get("question", "") or item.get("prompt", "")
             expected_answer = item.get("answer", "") or item.get("response", "")
         else:
-            # 假设dataset是(question, answer)元组的列表
             question, expected_answer = item
         
-        # 生成问题的答案
-        try:
-            generated_answer = generate_with_qwen_format(
-                model=model,
-                tokenizer=tokenizer,
-                prompt=question,
-                system_prompt="你是小说的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。",
-                max_new_tokens=args.max_length,
-                temperature=0.3,
-                do_sample=True  # 问答使用低温度采样
-            )
-            generated_answer = generated_answer.strip()
-        except Exception as e:
-            logger.error(f"生成答案时出错: {e}")
-            generated_answer = ""
+        # 生成答案
+        system_prompt = "你是小说的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。"
+        generated_answer = generate_with_qwen_format(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=question,
+            system_prompt=system_prompt,
+            max_new_tokens=args.max_length,
+            temperature=0.3,
+            do_sample=True
+        ).strip()
         
         # 精确匹配评估
         exact_match = generated_answer.lower() == expected_answer.lower()
         if exact_match:
-            correct_samples += 1
+            metrics_sum["correct"] += 1
         
-        # 计算ROUGE分数
-        try:
-            rouge_scores = scorer.score(expected_answer, generated_answer)
-            rouge_1_score = rouge_scores['rouge1'].fmeasure
-            rouge_2_score = rouge_scores['rouge2'].fmeasure
-            rouge_l_score = rouge_scores['rougeL'].fmeasure
-            
-            rouge_1_sum += rouge_1_score
-            rouge_2_sum += rouge_2_score
-            rouge_l_sum += rouge_l_score
-        except Exception as e:
-            logger.error(f"计算ROUGE分数时出错: {e}")
-            rouge_scores = {"rouge1": {"f": 0}, "rouge2": {"f": 0}, "rougeL": {"f": 0}}
-            rouge_1_score = rouge_2_score = rouge_l_score = 0
+        # 计算各项指标
+        # 1. ROUGE指标
+        rouge_scores = scorer.score(expected_answer, generated_answer)
+        metrics_sum["rouge_1"] += rouge_scores["rouge1"].fmeasure
+        metrics_sum["rouge_2"] += rouge_scores["rouge2"].fmeasure
+        metrics_sum["rouge_l"] += rouge_scores["rougeL"].fmeasure
         
-        # 计算BLEU分数 - 使用简单的空格分词
-        try:
-            # 尝试使用已有的punkt资源
-            try:
-                ref_tokens = nltk.word_tokenize(expected_answer.lower())
-                gen_tokens = nltk.word_tokenize(generated_answer.lower())
-            except Exception:
-                # 如果分词失败，回退到简单分词方法
-                ref_tokens = expected_answer.lower().split()
-                gen_tokens = generated_answer.lower().split()
-            
-            # 使用平滑函数计算BLEU
-            smoothie = SmoothingFunction().method1
-            bleu_score = sentence_bleu([ref_tokens], gen_tokens, smoothing_function=smoothie)
-            bleu_sum += bleu_score
-        except Exception as e:
-            logger.error(f"计算BLEU分数时出错: {e}")
-            bleu_score = 0
+        # 2. BLEU指标（使用简单分词）
+        ref_tokens = expected_answer.lower().split()
+        gen_tokens = generated_answer.lower().split()
+        smoothie = SmoothingFunction().method1
+        bleu_score = sentence_bleu([ref_tokens], gen_tokens, smoothing_function=smoothie)
+        metrics_sum["bleu"] += bleu_score
         
-        # 计算METEOR分数（如果可用）
+        # 3. METEOR指标（如可用）
         meteor_value = 0
-        if has_meteor and expected_answer and generated_answer:
-            try:
-                # 直接使用split()分词，避免依赖nltk分词器
-                meteor_value = meteor_score([expected_answer.split()], generated_answer.split())
-                meteor_sum += meteor_value
-            except Exception as e:
-                logger.error(f"计算METEOR分数时出错: {e}")
+        if has_meteor:
+            meteor_value = meteor_score([expected_answer.split()], generated_answer.split())
+            metrics_sum["meteor"] += meteor_value
         
-        # 计算BERTScore（如果可用）
+        # 4. BERTScore指标（每5个样本计算一次）
         bertscore_value = 0
-        if has_bertscore and not bertscore_connection_error and expected_answer and generated_answer:
-            # 只对部分样本计算BERTScore以节省时间
-            if i % 5 == 0:
-                try:
-                    local_model = "chinese-roberta-wwm-ext"  # 使用本地模型
-                    
-                    P, R, F1 = bert_score(
-                        [generated_answer], 
-                        [expected_answer], 
-                        lang="zh", 
-                        model_type=local_model,
-                        rescale_with_baseline=False,
-                        use_fast_tokenizer=True
-                    )
-                    bertscore_value = F1.item()
-                    bertscore_sum += bertscore_value
-                except Exception as e:
-                    # 如果出现错误，禁用后续BERTScore计算
-                    bertscore_connection_error = True
-                    logger.warning(f"禁用BERTScore，因为计算出错: {e}")
+        if has_bertscore and i % 5 == 0:
+            P, R, F1 = bert_score(
+                [generated_answer], [expected_answer], 
+                lang="zh", model_type=local_model,
+                rescale_with_baseline=False
+            )
+            bertscore_value = F1.item()
+            metrics_sum["bertscore"] += bertscore_value
+            bertscore_count += 1
         
-        # 收集样本数据（包含所有可用指标）
+        # 构建样本数据
         sample = {
             "question": question,
             "expected_answer": expected_answer,
             "generated_answer": generated_answer,
             "exact_match": exact_match,
             "rouge_scores": {
-                "rouge-1": {"f": rouge_1_score},
-                "rouge-2": {"f": rouge_2_score},
-                "rouge-l": {"f": rouge_l_score}
+                "rouge-1": {"f": rouge_scores['rouge1'].fmeasure},
+                "rouge-2": {"f": rouge_scores['rouge2'].fmeasure},
+                "rouge-l": {"f": rouge_scores['rougeL'].fmeasure}
             },
             "bleu": bleu_score
         }
         
-        # 只有在实际计算了METEOR和BERTScore时才添加这些字段
+        # 添加可选指标
         if has_meteor:
             sample["meteor"] = meteor_value
-        if has_bertscore and not bertscore_connection_error and i % 5 == 0:
+        if has_bertscore and i % 5 == 0:
             sample["bertscore"] = bertscore_value
             
         samples.append(sample)
-        total_samples += 1
     
-    # 计算整体指标
-    exact_match_ratio = correct_samples / total_samples if total_samples > 0 else 0
-    avg_rouge_1 = rouge_1_sum / total_samples if total_samples > 0 else 0
-    avg_rouge_2 = rouge_2_sum / total_samples if total_samples > 0 else 0
-    avg_rouge_l = rouge_l_sum / total_samples if total_samples > 0 else 0
-    avg_bleu = bleu_sum / total_samples if total_samples > 0 else 0
-    
-    # 组装结果
+    # 计算平均指标
+    total_samples = len(samples)
     results = {
-        "exact_match": exact_match_ratio,
-        "rouge-1-f": avg_rouge_1,
-        "rouge-2-f": avg_rouge_2,
-        "rouge-l-f": avg_rouge_l,
-        "bleu": avg_bleu,
+        "exact_match": metrics_sum["correct"] / total_samples if total_samples else 0,
+        "rouge-1-f": metrics_sum["rouge_1"] / total_samples if total_samples else 0,
+        "rouge-2-f": metrics_sum["rouge_2"] / total_samples if total_samples else 0,
+        "rouge-l-f": metrics_sum["rouge_l"] / total_samples if total_samples else 0,
+        "bleu": metrics_sum["bleu"] / total_samples if total_samples else 0,
         "samples": samples
     }
     
-    # 只在成功计算了的情况下添加METEOR和BERTScore
+    # 添加可选平均指标
     if has_meteor:
-        avg_meteor = meteor_sum / total_samples if total_samples > 0 else 0
-        results["meteor"] = avg_meteor
-        
-    if has_bertscore and not bertscore_connection_error:
-        # 计算BERTScore平均值，注意我们只对部分样本计算了
-        bertscore_count = len([s for s in samples if "bertscore" in s])
-        if bertscore_count > 0:
-            avg_bertscore = bertscore_sum / bertscore_count
-            results["bertscore"] = avg_bertscore
+        results["meteor"] = metrics_sum["meteor"] / total_samples if total_samples else 0
+    if has_bertscore and bertscore_count > 0:
+        results["bertscore"] = metrics_sum["bertscore"] / bertscore_count
     
     return results
 
