@@ -693,34 +693,18 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
 
 # 重构评估问答能力函数
 def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
-    """评估问答能力（简化版）"""
+    """评估问答能力（添加调试信息）"""
     logger.info("正在评估问答(QA)任务...")
-    
-    # 检查必要资源
-    has_meteor = False
-    try:
-        nltk.data.find('corpora/wordnet')
-        has_meteor = True
-    except LookupError:
-        pass
-    
-    # 检查BERTScore可用性，使用本地中文模型
-    has_bertscore = False
-    local_model = "chinese-roberta-wwm-ext"
-    try:
-        P, R, F1 = bert_score(["测试"], ["测试"], lang="zh", model_type=local_model)
-        has_bertscore = True
-    except:
-        pass
     
     # 初始化ROUGE评分器
     scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=False)
     
     # 初始化统计变量
-    metrics_sum = {"rouge_1": 0, "rouge_2": 0, "rouge_l": 0, "bleu": 0, 
-                  "meteor": 0, "bertscore": 0, "correct": 0}
+    metrics_sum = {"rouge_1": 0, "rouge_2": 0, "rouge_l": 0, "bleu": 0, "correct": 0}
     samples = []
-    bertscore_count = 0
+    
+    # 用于调试的计数器
+    zero_metrics_count = {"rouge": 0, "bleu": 0, "exact": 0, "total": 0}
     
     # 评估每个样本
     for i, item in enumerate(tqdm(qa_dataset, desc="评估QA")):
@@ -731,54 +715,119 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         else:
             question, expected_answer = item
         
+        # 输出调试信息：检查问题和参考答案
+        if i < 3:  # 仅显示前几个样本以避免日志过多
+            logger.info(f"调试样本 {i}:")
+            logger.info(f"问题: {question}")
+            logger.info(f"参考答案: {expected_answer}")
+        
+        # 清理参考答案，移除多余空白符
+        expected_answer = expected_answer.strip()
+        
         # 生成答案
-        system_prompt = f"你是小说《{args.novel_name}》的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。"
-        generated_answer = generate_with_qwen_format(
-            model=model,
-            tokenizer=tokenizer,
-            prompt=question,
-            system_prompt=system_prompt,
-            max_new_tokens=args.max_length,
-            temperature=0.3,
-            do_sample=True
-        ).strip()
+        system_prompt = f"你是小说《{args.novel_name or '未知'}》的阅读专家，请根据小说内容进行简要回答,无需回复与提问无关的内容和解释。"
+        try:
+            generated_answer = generate_with_qwen_format(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=question,
+                system_prompt=system_prompt,
+                max_new_tokens=args.max_length,
+                temperature=0.3,
+                do_sample=True
+            ).strip()
+            
+            # 输出调试信息：检查生成的答案
+            if i < 3:
+                logger.info(f"生成答案: {generated_answer}")
+                
+            # 检查生成的答案是否为空
+            if not generated_answer:
+                logger.warning(f"样本 {i} 生成的答案为空!")
+                generated_answer = "空答案"  # 使用占位符避免计算错误
+        except Exception as e:
+            logger.error(f"生成答案时出错: {e}")
+            generated_answer = "生成错误"
+        
+        zero_metrics_count["total"] += 1
         
         # 精确匹配评估
         exact_match = generated_answer.lower() == expected_answer.lower()
         if exact_match:
             metrics_sum["correct"] += 1
+        else:
+            zero_metrics_count["exact"] += 1
         
-        # 计算各项指标
-        # 1. ROUGE指标
-        rouge_scores = scorer.score(expected_answer, generated_answer)
-        metrics_sum["rouge_1"] += rouge_scores["rouge1"].fmeasure
-        metrics_sum["rouge_2"] += rouge_scores["rouge2"].fmeasure
-        metrics_sum["rouge_l"] += rouge_scores["rougeL"].fmeasure
+        # 计算ROUGE分数并添加调试信息
+        try:
+            # 确保文本非空
+            if not expected_answer or not generated_answer:
+                logger.warning(f"样本 {i} 的参考答案或生成答案为空，无法计算ROUGE分数")
+                rouge_scores = {"rouge1": {"f": 0}, "rouge2": {"f": 0}, "rougeL": {"f": 0}}
+                zero_metrics_count["rouge"] += 1
+            else:
+                rouge_scores = scorer.score(expected_answer, generated_answer)
+                
+                # 检查ROUGE分数是否为零
+                if rouge_scores["rougeL"].fmeasure == 0:
+                    zero_metrics_count["rouge"] += 1
+                    # 输出详细信息以进行调试
+                    if i < 10:
+                        logger.warning(f"样本 {i} 的ROUGE-L分数为0")
+                        logger.warning(f"参考分词: {list(expected_answer)}")
+                        logger.warning(f"生成分词: {list(generated_answer)}")
+            
+            metrics_sum["rouge_1"] += rouge_scores["rouge1"].fmeasure
+            metrics_sum["rouge_2"] += rouge_scores["rouge2"].fmeasure
+            metrics_sum["rouge_l"] += rouge_scores["rougeL"].fmeasure
+        except Exception as e:
+            logger.error(f"计算ROUGE分数时出错: {e}")
+            rouge_scores = {"rouge1": {"f": 0}, "rouge2": {"f": 0}, "rougeL": {"f": 0}}
+            zero_metrics_count["rouge"] += 1
         
-        # 2. BLEU指标（使用简单分词）
-        ref_tokens = expected_answer.lower().split()
-        gen_tokens = generated_answer.lower().split()
-        smoothie = SmoothingFunction().method1
-        bleu_score = sentence_bleu([ref_tokens], gen_tokens, smoothing_function=smoothie)
-        metrics_sum["bleu"] += bleu_score
-        
-        # 3. METEOR指标（如可用）
-        meteor_value = 0
-        if has_meteor:
-            meteor_value = meteor_score([expected_answer.split()], generated_answer.split())
-            metrics_sum["meteor"] += meteor_value
-        
-        # 4. BERTScore指标（每5个样本计算一次）
-        bertscore_value = 0
-        if has_bertscore and i % 5 == 0:
-            P, R, F1 = bert_score(
-                [generated_answer], [expected_answer], 
-                lang="zh", model_type=local_model,
-                rescale_with_baseline=False
-            )
-            bertscore_value = F1.item()
-            metrics_sum["bertscore"] += bertscore_value
-            bertscore_count += 1
+        # 计算BLEU分数 - 尝试不同的分词方法
+        try:
+            # 尝试多种分词方法
+            ref_tokens_methods = [
+                expected_answer.lower().split(),        # 方法1: 按空格分词
+                list(expected_answer.lower()),          # 方法2: 按字符分词
+                expected_answer.lower().split('\n')     # 方法3: 按行分词
+            ]
+            
+            gen_tokens_methods = [
+                generated_answer.lower().split(),
+                list(generated_answer.lower()),
+                generated_answer.lower().split('\n')
+            ]
+            
+            # 测试所有分词方法，并选择最好的分数
+            smoothie = SmoothingFunction().method1
+            bleu_scores = []
+            
+            for ref_tokens, gen_tokens in zip(ref_tokens_methods, gen_tokens_methods):
+                if not ref_tokens or not gen_tokens:
+                    bleu_scores.append(0)
+                    continue
+                
+                try:
+                    score = sentence_bleu([ref_tokens], gen_tokens, smoothing_function=smoothie)
+                    bleu_scores.append(score)
+                except Exception:
+                    bleu_scores.append(0)
+            
+            bleu_score = max(bleu_scores) if bleu_scores else 0
+            
+            # 记录零分情况
+            if bleu_score == 0:
+                zero_metrics_count["bleu"] += 1
+                if i < 10:
+                    logger.warning(f"样本 {i} 的BLEU分数为0，尝试了 {len(bleu_scores)} 种分词方法")
+            
+            metrics_sum["bleu"] += bleu_score
+        except Exception as e:
+            logger.error(f"计算BLEU分数时出错: {e}")
+            bleu_score = 0
+            zero_metrics_count["bleu"] += 1
         
         # 构建样本数据
         sample = {
@@ -794,30 +843,47 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             "bleu": bleu_score
         }
         
-        # 添加可选指标
-        if has_meteor:
-            sample["meteor"] = meteor_value
-        if has_bertscore and i % 5 == 0:
-            sample["bertscore"] = bertscore_value
-            
         samples.append(sample)
+    
+    # 输出调试统计信息
+    logger.info(f"评估完成! 总样本数: {zero_metrics_count['total']}")
+    logger.info(f"精确匹配为0的样本数: {zero_metrics_count['exact']} ({zero_metrics_count['exact']/zero_metrics_count['total']*100:.1f}%)")
+    logger.info(f"ROUGE分数为0的样本数: {zero_metrics_count['rouge']} ({zero_metrics_count['rouge']/zero_metrics_count['total']*100:.1f}%)")
+    logger.info(f"BLEU分数为0的样本数: {zero_metrics_count['bleu']} ({zero_metrics_count['bleu']/zero_metrics_count['total']*100:.1f}%)")
     
     # 计算平均指标
     total_samples = len(samples)
+    if total_samples == 0:
+        logger.error("没有有效的QA样本!")
+        return {
+            "exact_match": 0,
+            "rouge-1-f": 0,
+            "rouge-2-f": 0,
+            "rouge-l-f": 0,
+            "bleu": 0,
+            "samples": []
+        }
+    
     results = {
-        "exact_match": metrics_sum["correct"] / total_samples if total_samples else 0,
-        "rouge-1-f": metrics_sum["rouge_1"] / total_samples if total_samples else 0,
-        "rouge-2-f": metrics_sum["rouge_2"] / total_samples if total_samples else 0,
-        "rouge-l-f": metrics_sum["rouge_l"] / total_samples if total_samples else 0,
-        "bleu": metrics_sum["bleu"] / total_samples if total_samples else 0,
+        "exact_match": metrics_sum["correct"] / total_samples,
+        "rouge-1-f": metrics_sum["rouge_1"] / total_samples,
+        "rouge-2-f": metrics_sum["rouge_2"] / total_samples,
+        "rouge-l-f": metrics_sum["rouge_l"] / total_samples,
+        "bleu": metrics_sum["bleu"] / total_samples,
         "samples": samples
     }
     
-    # 添加可选平均指标
-    if has_meteor:
-        results["meteor"] = metrics_sum["meteor"] / total_samples if total_samples else 0
-    if has_bertscore and bertscore_count > 0:
-        results["bertscore"] = metrics_sum["bertscore"] / bertscore_count
+    # 显示最终结果
+    logger.info(f"QA评估结果:")
+    logger.info(f"精确匹配率: {results['exact_match']:.4f}")
+    logger.info(f"ROUGE-L: {results['rouge-l-f']:.4f}")
+    logger.info(f"BLEU: {results['bleu']:.4f}")
+    
+    # 检查是否所有指标都为0
+    if (results['exact_match'] == 0 and 
+        results['rouge-l-f'] == 0 and 
+        results['bleu'] == 0):
+        logger.error("警告: 所有QA评估指标都为0! 请检查模型输出和参考答案。")
     
     return results
 
