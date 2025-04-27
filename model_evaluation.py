@@ -838,6 +838,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
                     # 使用标准 ROUGE 计算
                     rouge_scores = scorer.score(expected_answer, generated_answer)
                     
+                    logger.info(f"样本 {i} - 精确匹配: {rouge_scores}")
                     # 将 ROUGE 对象转换为简单字典
                     rouge_scores = {
                         "rouge1": {"f": rouge_scores["rouge1"].fmeasure},
@@ -867,7 +868,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             "rouge_scores": rouge_scores,
             "bleu": bleu_score
         }
-        logger.info(f"样本 {i} - 精确匹配: {sample}")
+        
         samples.append(sample)
     
     # 计算平均指标
@@ -1760,7 +1761,7 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
                 prompt=prompt,
                 system_prompt=system_prompt,
                 max_new_tokens=args.max_length,
-                temperature=0.1,   # 低温度保证选择的确定性
+                temperature=0.3,   # 低温度保证选择的确定性
                 do_sample=False    # 使用贪婪解码
             ).strip()
             
