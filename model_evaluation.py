@@ -29,7 +29,13 @@ from nltk.translate.meteor_score import meteor_score
 from bert_score import score as bert_score
 from rouge_score import rouge_scorer
 
-# 设置HuggingFace国内镜像
+# 设置NLTK数据目录到已下载位置
+import nltk
+nltk.data.path.insert(0, "/home/zhangyue/nltk_data")
+logger = logging.getLogger(__name__)
+logger.info(f"已设置NLTK数据路径: {nltk.data.path}")
+
+# 配置HuggingFace镜像
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 # 或者可以尝试其他镜像
 # os.environ["HF_ENDPOINT"] = "https://mirror.baai.ac.cn/huggingface"
@@ -682,48 +688,46 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
 def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False):
     logger.info("正在评估问答(QA)任务...")
     
-    # 添加正确的NLTK资源下载
+    # 验证NLTK资源是否可用，而不是尝试下载
     try:
-        nltk.download('punkt', quiet=True)
-    except Exception as e:
-        logger.warning(f"无法下载NLTK punkt资源: {e}")
+        nltk.data.find('tokenizers/punkt')
+        logger.info("已找到NLTK punkt资源")
+    except LookupError:
+        logger.warning("未找到NLTK punkt资源，将使用简单分词方法")
     
-    # 尝试导入METEOR评分库（如果可用）
+    # 检查METEOR评分所需资源
+    has_meteor = False
     try:
+        nltk.data.find('corpora/wordnet')
         from nltk.translate.meteor_score import meteor_score
-        nltk.download('wordnet', quiet=True)
         has_meteor = True
-    except (ImportError, LookupError):
-        has_meteor = False
-        logger.warning("NLTK wordnet或meteor_score不可用，无法计算METEOR分数")
+        logger.info("已找到NLTK wordnet资源，将计算METEOR分数")
+    except (ImportError, LookupError) as e:
+        logger.warning(f"无法使用METEOR评分: {e}")
     
     # 初始化BERTScore可用性标志，默认为False
     has_bertscore = False
     bertscore_connection_error = False
     
-    # 预先检查BERTScore是否可用，避免在循环中多次尝试
+    # 预先检查BERTScore是否可用
     try:
         from bert_score import score as bert_score
-        # 尝试用一个非常短的测试用例验证连接
+        # 尝试用本地模型验证
         try:
-            # 使用更小的模型和缓存选项
+            local_model = "chinese-roberta-wwm-ext"  # 使用本地模型
+            
+            # 验证模型可用性
             _, _, _ = bert_score(
                 ["测试"], ["测试"], 
                 lang="zh", 
-                model_type="distilbert-base-multilingual-cased",
+                model_type=local_model,
                 use_fast_tokenizer=True,
-                cache_dir="./hf_cache",  # 添加本地缓存目录
                 verbose=False
             )
             has_bertscore = True
-            logger.info("BERTScore连接测试成功，将计算BERTScore")
+            logger.info(f"已使用本地模型 {local_model} 初始化BERTScore")
         except Exception as e:
-            if "connect to 'https://huggingface.co'" in str(e):
-                bertscore_connection_error = True
-                logger.warning(f"即使使用镜像仍无法连接到HuggingFace，BERTScore将被禁用: {e}")
-                logger.warning("请尝试手动下载模型到本地，或者跳过BERTScore评估")
-            else:
-                logger.warning(f"BERTScore初始化错误，将被禁用: {e}")
+            logger.warning(f"BERTScore初始化错误: {e}")
     except ImportError:
         logger.warning("bert_score库不可用，无法计算BERTScore")
     
@@ -791,9 +795,14 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         
         # 计算BLEU分数 - 使用简单的空格分词
         try:
-            # 使用简单的空格分词替代nltk分词器
-            ref_tokens = expected_answer.lower().split()
-            gen_tokens = generated_answer.lower().split()
+            # 尝试使用已有的punkt资源
+            try:
+                ref_tokens = nltk.word_tokenize(expected_answer.lower())
+                gen_tokens = nltk.word_tokenize(generated_answer.lower())
+            except Exception:
+                # 如果分词失败，回退到简单分词方法
+                ref_tokens = expected_answer.lower().split()
+                gen_tokens = generated_answer.lower().split()
             
             # 使用平滑函数计算BLEU
             smoothie = SmoothingFunction().method1
@@ -813,32 +822,28 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             except Exception as e:
                 logger.error(f"计算METEOR分数时出错: {e}")
         
-        # 计算BERTScore（如果可用，且只在没有连接错误的情况下尝试）
+        # 计算BERTScore（如果可用）
         bertscore_value = 0
         if has_bertscore and not bertscore_connection_error and expected_answer and generated_answer:
             # 只对部分样本计算BERTScore以节省时间
             if i % 5 == 0:
                 try:
-                    # 使用国内可访问的较小多语言模型
+                    local_model = "chinese-roberta-wwm-ext"  # 使用本地模型
+                    
                     P, R, F1 = bert_score(
                         [generated_answer], 
                         [expected_answer], 
                         lang="zh", 
-                        model_type="distilbert-base-multilingual-cased",  # 小型多语言模型
-                        rescale_with_baseline=False,  # 关闭基线重缩放
-                        use_fast_tokenizer=True,      # 使用快速分词器
-                        cache_dir="./hf_cache",       # 本地缓存目录
-                        verbose=False                 # 减少输出
+                        model_type=local_model,
+                        rescale_with_baseline=False,
+                        use_fast_tokenizer=True
                     )
                     bertscore_value = F1.item()
                     bertscore_sum += bertscore_value
                 except Exception as e:
-                    # 如果出现连接错误，禁用后续BERTScore计算
-                    if "connect to 'https://huggingface.co'" in str(e):
-                        bertscore_connection_error = True
-                        logger.warning(f"禁用BERTScore，因为无法连接HuggingFace: {e}")
-                    else:
-                        logger.error(f"计算BERTScore时出错: {e}")
+                    # 如果出现错误，禁用后续BERTScore计算
+                    bertscore_connection_error = True
+                    logger.warning(f"禁用BERTScore，因为计算出错: {e}")
         
         # 收集样本数据（包含所有可用指标）
         sample = {
