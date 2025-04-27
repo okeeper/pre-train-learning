@@ -803,7 +803,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             prompt=question,
             system_prompt=system_prompt,
             max_new_tokens=args.max_length,
-            temperature=0.1,  # 低温度，提高确定性
+            temperature=0.3,  # 低温度，提高确定性
             do_sample=False   # 贪婪解码
         ).strip()
         
