@@ -791,7 +791,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             logger.info(f"样本 {i}:\n问题: {question}\n参考答案: {expected_answer}")
         
         # 使用更适合中文QA的系统提示
-        system_prompt = f"你是一个小说阅读助手。请根据小说内容直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
+        system_prompt = f"你是一个小说《{args.novel_name}》阅读助手。请根据小说内容直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
         
         # 生成答案
         generated_answer = generate_with_qwen_format(
@@ -1752,7 +1752,7 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
         prompt += instruction
         
         # 生成答案
-        system_prompt = f"你是一个小说阅读助手。请根据小说内容回答下面单选题，只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
+        system_prompt = f"你是一个小说《{args.novel_name}》阅读助手。请根据小说内容回答下面单选题，只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
         try:
             generated_answer = generate_with_qwen_format(
                 model=model,
