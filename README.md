@@ -129,7 +129,7 @@ python model_evaluation.py \
     --model_path output/qwen_novel_pretrain_knowledge \
     --perplexity_dataset data/xd_eval_preplexity.txt \
     --novel_name "亵渎" \
-    --qa_dataset ./data/xd_eval_qa2.csv \
+    --qa_dataset ./data/xd_qa_alpaca_01.json,./data/xd_qa_alpaca_02.json \
     --single_choice_dataset ./data/xd_eval_choice.csv \
     --output_dir ./output/evaluation_results \
     --tasks perplexity,qa,generation,single_choice \

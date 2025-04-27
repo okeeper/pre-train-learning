@@ -305,21 +305,28 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
 
 if __name__ == "__main__":
     # 分割小说文本
-    chunks = split_novel_into_chapters_and_chunks("data/novel.txt", 
-                                                  "data/novel_chunks_1024.json",
-                                                  "龙战士传奇", 
-                                                  chapter_is_split_by_newline=True, 
-                                                  max_chunk_size=1024, 
-                                                  min_chunk_size=768, 
-                                                  overlap=0)
+    # chunks = split_novel_into_chapters_and_chunks("data/novel.txt", 
+    #                                               "data/novel_chunks_1024.json",
+    #                                               "龙战士传奇", 
+    #                                               chapter_is_split_by_newline=True, 
+    #                                               max_chunk_size=1024, 
+    #                                               min_chunk_size=768, 
+    #                                               overlap=0)
     
     # 写一个循环，遍历32,64,128,256,512,768,1024,1280,1536,1792,2048,4096,32k  生成不同大小的chunks
-    for chunk_size in [32,64,128,256,512,768,1024,1280,1536,1792,2048,4096,32768]:
-        chunks = split_novel_into_chapters_and_chunks("data/亵渎.txt", 
-                                                  f"data/xd_chunks_{chunk_size}.json",
+    # for chunk_size in [32,64,128,256,512,768,1024,1280,1536,1792,2048,4096,32768]:
+    #     chunks = split_novel_into_chapters_and_chunks("data/亵渎.txt", 
+    #                                               f"data/xd_chunks_{chunk_size}.json",
+    #                                               "亵渎", 
+    #                                               chapter_is_split_by_newline=False, 
+    #                                               max_chunk_size=chunk_size, 
+    #                                               min_chunk_size=0, 
+    #                                               overlap=0)
+    chunks = split_novel_into_chapters_and_chunks("data/亵渎.txt", 
+                                                  f"data/xd_chunks_10240.json",
                                                   "亵渎", 
                                                   chapter_is_split_by_newline=False, 
-                                                  max_chunk_size=chunk_size, 
+                                                  max_chunk_size=10240, 
                                                   min_chunk_size=0, 
                                                   overlap=0)
 
