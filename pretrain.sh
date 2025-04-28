@@ -94,7 +94,20 @@ python pretrain_qwen_novel.py \
   --use_wandb
 
 # 10240 chunks
-python pretrain_qwen_novel.py \
+python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
+  --model_name_or_path output/qwen_novel_pretrain_knowledge3 \
+  --output_dir output/qwen_novel_pretrain_knowledge_final \
+  --wandb_name qwen_novel_pretrain_knowledge_final \
+  --file_pattern "xd_chunks_4096.json,xd_chunks_1024.json,xd_chunks_512.json" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 2 \
+  --max_seq_length 4096 \
+  --num_train_epochs 1 \
+  --learning_rate 1e-5 \
+  --logging_steps 5 \
+  --use_wandb
+  
+torchrun --nproc_per_node=2 --rdzv_backend=c10d pretrain_qwen_novel.py \
   --model_name_or_path output/qwen_novel_pretrain_knowledge3 \
   --output_dir output/qwen_novel_pretrain_knowledge_final \
   --wandb_name qwen_novel_pretrain_knowledge_final \

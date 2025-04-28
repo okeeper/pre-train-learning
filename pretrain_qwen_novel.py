@@ -172,6 +172,13 @@ def parse_args():
         default=-1,
         help=argparse.SUPPRESS,  # 在帮助信息中隐藏这个重复参数
     )
+    # 这是关键变化：torchrun使用RANK和WORLD_SIZE环境变量
+    parser.add_argument(
+        "--local_rank",
+        type=int,
+        default=int(os.environ.get("LOCAL_RANK", -1)),  # 支持两种启动方式
+        help="分布式训练的本地排名",
+    )
     args = parser.parse_args()
     return args
 
