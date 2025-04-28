@@ -100,7 +100,7 @@ class NovelPretrainGenerator:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
         # 创建详细日志目录
-        self.log_dir = os.path.join(output_dir, "logs")
+        self.log_dir = "logs"
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         
         # 请求计数器，用于生成唯一的请求ID
