@@ -521,11 +521,10 @@ def main():
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
     )
-
-     # 检查是否真正使用了多GPU训练
+    # 检查是否真正使用了多GPU训练
     if not hasattr(model, "module"):  # 检查是否被DDP或DataParallel包装
         # 未使用多GPU训练，强制n_gpu=1
-        training_args.n_gpu = 1
+        training_args._n_gpu = 1
         logger.warning("检测到代码未正确设置多GPU训练，强制使用单GPU模式计算批次大小")
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
