@@ -279,7 +279,7 @@ def setup_wandb(args):
         return True
     return False
 
-def print_training_config(args, model_config, train_dataset, effective_batch_size):
+def print_training_config(args, model_config, train_dataset, is_distributed):
     """使用简单的制表符对齐方式打印训练配置"""
     from datetime import datetime
     
@@ -304,6 +304,13 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     
     # 使用简单的分隔线
     separator = "-" * 80
+
+     # 计算有效批次大小,兼容单卡
+    if is_distributed:
+        world_size = torch.distributed.get_world_size()
+        effective_batch_size = args.per_device_train_batch_size * world_size * args.gradient_accumulation_steps
+    else:
+        effective_batch_size = args.per_device_train_batch_size * args.gradient_accumulation_steps
     
     # 打印基本信息
     print("\n\n")
@@ -410,97 +417,6 @@ def print_training_config(args, model_config, train_dataset, effective_batch_siz
     print(separator)
     print("\n")
 
-class ProgressCallback(TrainerCallback):
-    def __init__(self, is_main_process=True):
-        self.is_main_process = is_main_process
-        self.start_time = time.time()
-        self.last_log_time = self.start_time
-        self.last_metrics = {}
-        
-    def on_log(self, args, state, control, logs=None, **kwargs):
-        """处理日志回调，显示简洁字典格式的日志，模拟原生格式"""
-        if not self.is_main_process or logs is None:
-            return control
-        
-        # 提取关键指标
-        metrics = {}
-        for k, v in logs.items():
-            # 只保留重要的指标
-            if k in ['loss', 'learning_rate', 'epoch', 'grad_norm']:
-                if isinstance(v, float):
-                    # 保持数字格式的一致性
-                    if k == 'loss':
-                        metrics[k] = round(v, 4)
-                    else:
-                        metrics[k] = v
-                else:
-                    metrics[k] = v
-        
-        # 打印原生格式日志
-        print_str = str(metrics)
-        
-        # 判断是否需要显示进度条
-        if state.max_steps > 0 and state.global_step > 0:
-            # 计算进度百分比
-            progress = int(100 * state.global_step / state.max_steps)
-            
-            # 计算已用时间和估计剩余时间
-            elapsed = time.time() - self.start_time
-            if state.global_step > 0:
-                time_per_step = elapsed / state.global_step
-                remaining = time_per_step * (state.max_steps - state.global_step)
-                
-                # 格式化时间
-                mins_elapsed = int(elapsed // 60)
-                secs_elapsed = int(elapsed % 60)
-                mins_remaining = int(remaining // 60)
-                secs_remaining = int(remaining % 60)
-                
-                # 构建进度条
-                bar_length = 80
-                filled_length = int(bar_length * state.global_step // state.max_steps)
-                bar = '█' * filled_length + ' ' * (bar_length - filled_length)
-                
-                # 使用与原生格式一致的进度条
-                progress_str = f" {progress}%|{bar}| {state.global_step}/{state.max_steps} [{mins_elapsed}:{secs_elapsed:02d}<{mins_remaining}:{secs_remaining:02d}, {time_per_step:.2f}s/it]"
-                
-                # 每10步打印一次进度条
-                if state.global_step % 10 == 0:
-                    print(print_str.ljust(100))
-                    print(progress_str, end='\r')
-            else:
-                print(print_str.ljust(100))
-        else:
-            # 没有最大步数时只打印指标
-            print(print_str.ljust(100))
-        
-        # 保存当前指标
-        self.last_metrics = metrics
-        
-        return control
-    
-    def on_train_end(self, args, state, control, **kwargs):
-        """训练结束时打印完整进度条"""
-        if not self.is_main_process:
-            return control
-        
-        if state.max_steps > 0:
-            # 计算已用时间
-            elapsed = time.time() - self.start_time
-            mins_elapsed = int(elapsed // 60)
-            secs_elapsed = int(elapsed % 60)
-            
-            # 构建完成的进度条
-            bar_length = 80
-            bar = '█' * bar_length
-            
-            # 使用与原生格式一致的进度条
-            progress_str = f" 100%|{bar}| {state.max_steps}/{state.max_steps} [{mins_elapsed}:{secs_elapsed:02d}<00:00, {elapsed/state.max_steps:.2f}s/it]"
-            print(progress_str)
-            print(f"\n训练完成! 总时间: {mins_elapsed}分{secs_elapsed}秒")
-        
-        return control
-
 def main():
     # 忽略 SIGHUP 信号
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
@@ -573,18 +489,16 @@ def main():
         file_pattern=args.file_pattern
     )
     
-    # 计算有效批次大小
-    gpu_count = torch.cuda.device_count()
-    world_size = torch.distributed.get_world_size() if is_distributed else 1
-    effective_batch_size = args.per_device_train_batch_size * world_size * args.gradient_accumulation_steps
+   
     
     # 仅在主进程打印训练配置
     if is_main_process:
-        print_training_config(args, model_config, train_dataset, effective_batch_size)
+        print_training_config(args, model_config, train_dataset, is_distributed)
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True,
+        n_gpu=torch.cuda.device_count() if is_distributed else 1,
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,

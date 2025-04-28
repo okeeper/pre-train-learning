@@ -126,7 +126,7 @@ python test_chat.py --model_path /path/to/your/model --lora_path /path/to/your/l
 ```
 # c3,squad_v2,
 python model_evaluation.py \
-    --model_path output/qwen_novel_pretrain_knowledge \
+    --model_path output/qwen_novel_pretrain_knowledge2 \
     --perplexity_dataset data/xd_eval_preplexity.txt \
     --novel_name "亵渎" \
     --qa_dataset ./data/xd_qa_alpaca_01.json,./data/xd_qa_alpaca_02.json \
@@ -138,7 +138,7 @@ python model_evaluation.py \
     --fp16 \
     --use_wandb
 
-
+# Qwen原模型
 python model_evaluation.py \
     --model_path Qwen/Qwen2.5-1.5B-Instruct \
     --perplexity_dataset data/xd_eval_preplexity.txt \
@@ -147,6 +147,35 @@ python model_evaluation.py \
     --single_choice_dataset ./data/xd_eval_choice.csv \
     --output_dir ./output/evaluation_results \
     --tasks perplexity,qa,generation,single_choice \
+    --num_samples -1 \
+    --batch_size 16 \
+    --fp16 \
+    --use_wandb
+
+# 仅chunks_128 chunks_4096
+python model_evaluation.py \
+    --model_path output/qwen_novel_pretrain_short \
+    --perplexity_dataset data/xd_eval_preplexity.txt \
+    --novel_name "亵渎" \
+    --qa_dataset ./data/xd_eval_qa2.csv \
+    --single_choice_dataset ./data/xd_eval_choice.csv \
+    --output_dir ./output/evaluation_results \
+    --tasks perplexity,qa,generation,single_choice \
+    --num_samples -1 \
+    --batch_size 16 \
+    --fp16 \
+    --use_wandb
+
+# 10240 chunks
+
+python model_evaluation.py \
+    --model_path output/qwen_novel_pretrain_knowledge3 \
+    --perplexity_dataset data/xd_eval_preplexity.txt \
+    --novel_name "亵渎" \
+    --qa_dataset ./data/xd_eval_qa2.csv \
+    --single_choice_dataset ./data/xd_eval_choice.csv \
+    --output_dir ./output/evaluation_results \
+    --tasks perplexity,qa,single_choice \
     --num_samples -1 \
     --batch_size 16 \
     --fp16 \
