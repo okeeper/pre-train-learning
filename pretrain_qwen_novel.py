@@ -428,7 +428,7 @@ def main():
     set_seed(args.seed)
     
     # 检查是否在分布式环境中
-    is_distributed = args.local_rank != -1
+    is_distributed = args.local_rank != -1 or torch.distributed.is_initialized()
     if is_distributed:
         # 先设置GPU设备，再初始化分布式环境
         if torch.cuda.is_available():
