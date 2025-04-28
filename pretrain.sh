@@ -93,14 +93,15 @@ python pretrain_qwen_novel.py \
   --logging_steps 5 \
   --use_wandb
 
+# 10240 chunks
 python pretrain_qwen_novel.py \
-  --model_name_or_path output/qwen_novel_pretrain_knowledge2 \
-  --output_dir output/qwen_novel_pretrain_knowledge3 \
-  --wandb_name qwen_novel_pretrain_knowledge3 \
-  --file_pattern "xd_chunks_10240.json" \
-  --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 1 \
-  --max_seq_length 8000 \
+  --model_name_or_path output/qwen_novel_pretrain_knowledge3 \
+  --output_dir output/qwen_novel_pretrain_knowledge_final \
+  --wandb_name qwen_novel_pretrain_knowledge_final \
+  --file_pattern "xd_chunks_4096.json,xd_chunks_1024.json,xd_chunks_512.json" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 2 \
+  --max_seq_length 4096 \
   --num_train_epochs 1 \
   --learning_rate 1e-5 \
   --logging_steps 5 \
