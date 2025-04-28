@@ -45,7 +45,7 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
     content = re.sub(r'-{3,}', '', content)
     
     # 删除多个（多于1个）换行符，替换为单个换行符
-    content = re.sub(r'\n{2,}', '\n', content)
+    #content = re.sub(r'\n{2,}', '\n', content)
     
     # 分割成行
     lines = content.split('\n')
@@ -115,8 +115,8 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
         # 使用正则表达式识别章节标题
         for line in lines:
 
-            if not line.strip():  # 跳过空行
-                continue    
+            # if not line.strip():  # 跳过空行
+            #     continue    
 
             # 先检查是否是卷标题
             if volume_pattern1.match(line):
@@ -211,8 +211,7 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
             # 2. 将句子内部的多个空白字符替换为单个空格
             #sentence = re.sub(r'\s+', ' ', sentence)
             # 3. 如果句子不为空，添加到结果列表
-            if sentence.strip():
-                sentences.append(sentence)
+            sentences.append(sentence)
         
         # 使用迭代方法而非递归来分组句子
         def split_sentences_into_chunks(sentences_list):
@@ -303,6 +302,9 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
         # 将分组后的句子转换为文本块
         for i, group in enumerate(sentence_groups):
             chunk_text = ''.join(group["text"])
+            chunk_text = chunk_text.strip()
+            if not chunk_text:
+                continue
             
             # 如果章节被分成多个块，则在标题后添加编号
             chunk_title = chapter_title

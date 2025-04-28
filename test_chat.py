@@ -18,8 +18,23 @@ def load_model_and_tokenizer(model_path, lora_path=None, quantization=None, gpu_
     }
     
     # 量化设置
-    if quantization == "4bit":
+    quantization_available = True
+    bnb_available = False
+    try:
+        import bitsandbytes
         from transformers import BitsAndBytesConfig
+        bnb_available = True
+    except ImportError:
+        quantization_available = False
+        print("警告: 未安装bitsandbytes库，无法使用量化功能。")
+        print("您可以通过运行以下命令安装它: pip install bitsandbytes>=0.39.0")
+    
+    if quantization and not quantization_available:
+        print(f"警告: 已请求{quantization}位量化，但未找到所需依赖。将使用默认FP16精度。")
+        quantization = None
+    
+    # 只有在bitsandbytes可用时才应用量化
+    if quantization == "4bit" and bnb_available:
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.float16,
@@ -27,35 +42,55 @@ def load_model_and_tokenizer(model_path, lora_path=None, quantization=None, gpu_
             bnb_4bit_quant_type="nf4"
         )
         print("使用4位量化加载模型")
-    elif quantization == "8bit":
-        from transformers import BitsAndBytesConfig
+    elif quantization == "8bit" and bnb_available:
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_8bit=True
         )
         print("使用8位量化加载模型")
     else:
+        # 回退到FP16
         load_kwargs["torch_dtype"] = torch.float16
         print("使用FP16精度加载模型")
     
-    # GPU内存优化
+    # GPU内存优化 - 检查flash attention是否可用
     if gpu_memory_efficient:
-        print("启用GPU内存优化")
-        load_kwargs["use_flash_attention_2"] = True
+        try:
+            # 尝试导入flash-attn
+            import importlib.util
+            flash_attn_spec = importlib.util.find_spec("flash_attn")
+            if flash_attn_spec is not None:
+                load_kwargs["use_flash_attention_2"] = True
+                print("启用Flash Attention 2进行GPU内存优化")
+            else:
+                print("警告: Flash Attention未安装，跳过GPU内存优化。")
+                print("您可以通过运行以下命令安装它: pip install flash-attn")
+        except Exception as e:
+            print(f"设置Flash Attention时出错: {e}")
+            print("跳过GPU内存优化")
     
     # CPU卸载设置
     if cpu_offload:
-        print("启用CPU卸载功能以节省GPU内存")
-        from accelerate import init_empty_weights
-        from accelerate import load_checkpoint_and_dispatch
-        
-        with init_empty_weights():
-            model = AutoModelForCausalLM.from_config(
-                AutoModelForCausalLM.config_class.from_pretrained(model_path)
+        try:
+            from accelerate import init_empty_weights, load_checkpoint_and_dispatch
+            
+            print("启用CPU卸载功能以节省GPU内存")
+            with init_empty_weights():
+                model = AutoModelForCausalLM.from_config(
+                    AutoModelForCausalLM.from_pretrained(model_path, 
+                                                       trust_remote_code=True).config
+                )
+            model = load_checkpoint_and_dispatch(
+                model, model_path, device_map="auto", 
+                offload_folder="offload", offload_state_dict=True
             )
-        model = load_checkpoint_and_dispatch(
-            model, model_path, device_map="auto", 
-            offload_folder="offload", offload_state_dict=True
-        )
+        except ImportError:
+            print("警告: accelerate库未正确安装，无法使用CPU卸载功能。")
+            print("您可以通过运行以下命令安装它: pip install accelerate")
+            model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs)
+        except Exception as e:
+            print(f"CPU卸载设置错误: {e}")
+            print("回退到标准加载方式")
+            model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs)
     else:
         model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs)
     

@@ -1,0 +1,459 @@
+2025-04-28 18:50:48,990 - __main__ - INFO - 自动计算的参数: 最大输入tokens=89250, 最大输出tokens=38250
+2025-04-28 18:50:49,138 - __main__ - INFO - 加载小说数据并处理章节分片...
+2025-04-28 18:50:49,161 - __main__ - INFO - 成功加载小说数据: data/xd_chunks_4096.json, 共850个分片
+2025-04-28 18:50:49,164 - __main__ - INFO - 合并后的章节数量: 374
+2025-04-28 18:50:49,164 - __main__ - INFO - 开始生成预训练数据...
+2025-04-28 18:50:49,368 - __main__ - ERROR - 调用OpenAI API失败: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-04-28 18:50:53,374 - __main__ - ERROR - 调用OpenAI API失败: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-04-28 18:50:57,378 - __main__ - ERROR - 调用OpenAI API失败: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-04-28 18:50:57,380 - __main__ - ERROR - 执行任务 _generate_character_analysis 失败: RetryError[<Future at 0x7fd5121d7550 state=finished raised APIRemovedInV1>]
+2025-04-28 18:50:57,380 - __main__ - ERROR - 调用OpenAI API失败: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-04-28 18:51:01,382 - __main__ - ERROR - 调用OpenAI API失败: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-04-28 18:51:05,383 - __main__ - ERROR - 调用OpenAI API失败: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-04-28 18:51:05,384 - __main__ - ERROR - 执行任务 _generate_alternate_pov 失败: RetryError[<Future at 0x7fd5121d74c0 state=finished raised APIRemovedInV1>]
+2025-04-28 18:51:05,384 - __main__ - ERROR - 调用OpenAI API失败: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-04-28 18:51:24,275 - __main__ - INFO - 自动计算的参数: 最大输入tokens=89250, 最大输出tokens=38250
+2025-04-28 18:51:24,425 - __main__ - INFO - 加载小说数据并处理章节分片...
+2025-04-28 18:51:24,451 - __main__ - INFO - 成功加载小说数据: data/xd_chunks_4096.json, 共850个分片
+2025-04-28 18:51:24,455 - __main__ - INFO - 合并后的章节数量: 374
+2025-04-28 18:51:24,455 - __main__ - INFO - 开始生成预训练数据...
+2025-04-28 18:51:25,504 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:51:25,616 - __main__ - ERROR - 旧版API调用也失败: choices
+2025-04-28 18:51:30,094 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:51:30,231 - __main__ - ERROR - 旧版API调用也失败: choices
+2025-04-28 18:51:35,727 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:51:36,180 - __main__ - ERROR - 旧版API调用也失败: choices
+2025-04-28 18:51:36,180 - __main__ - ERROR - 执行任务 _generate_alternate_pov 失败: RetryError[<Future at 0x7fa162670070 state=finished raised AttributeError>]
+2025-04-28 18:51:36,718 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:51:36,815 - __main__ - ERROR - 旧版API调用也失败: choices
+2025-04-28 18:51:41,429 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:51:41,528 - __main__ - ERROR - 旧版API调用也失败: choices
+2025-04-28 18:51:45,955 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:51:46,439 - __main__ - ERROR - 旧版API调用也失败: choices
+2025-04-28 18:51:46,439 - __main__ - ERROR - 执行任务 _generate_location_description 失败: RetryError[<Future at 0x7fa17134fca0 state=finished raised AttributeError>]
+2025-04-28 18:55:30,341 - __main__ - INFO - 自动计算的参数: 最大输入tokens=89250, 最大输出tokens=38250
+2025-04-28 18:55:30,495 - __main__ - INFO - 加载小说数据并处理章节分片...
+2025-04-28 18:55:30,519 - __main__ - INFO - 成功加载小说数据: data/xd_chunks_4096.json, 共850个分片
+2025-04-28 18:55:30,523 - __main__ - INFO - 合并后的章节数量: 374
+2025-04-28 18:55:30,523 - __main__ - INFO - 开始生成预训练数据...
+2025-04-28 18:55:32,325 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:35,001 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:38,615 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:38,616 - __main__ - ERROR - 执行任务 _generate_location_description 失败: RetryError[<Future at 0x7f9c8114a650 state=finished raised AttributeError>]
+2025-04-28 18:55:39,333 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:40,914 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:43,333 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:43,334 - __main__ - ERROR - 执行任务 _generate_emotion_analysis 失败: RetryError[<Future at 0x7f9c8a3c3ac0 state=finished raised AttributeError>]
+2025-04-28 18:55:43,996 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:45,741 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:48,600 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:48,601 - __main__ - ERROR - 执行任务 _generate_chapter_summary 失败: RetryError[<Future at 0x7f9c8a3c38b0 state=finished raised AttributeError>]
+2025-04-28 18:55:49,098 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:50,674 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:53,295 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:53,296 - __main__ - ERROR - 执行任务 _generate_location_description 失败: RetryError[<Future at 0x7f9c68ba0af0 state=finished raised AttributeError>]
+2025-04-28 18:55:53,954 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:55:55,690 - __main__ - WARNING - ChatCompletion API调用失败: choices，尝试使用旧版API
+2025-04-28 18:57:17,283 - __main__ - INFO - 自动计算的参数: 最大输入tokens=2517, 最大输出tokens=1078
+2025-04-28 18:57:17,430 - __main__ - INFO - 加载小说数据并处理章节分片...
+2025-04-28 18:57:17,458 - __main__ - INFO - 成功加载小说数据: data/xd_chunks_4096.json, 共850个分片
+2025-04-28 18:57:17,461 - __main__ - INFO - 合并后的章节数量: 374
+2025-04-28 18:57:17,461 - __main__ - INFO - 开始生成预训练数据...
+2025-04-28 19:02:28,314 - __main__ - INFO - [N/A] - 自动计算的参数: 最大输入tokens=2517, 最大输出tokens=1078
+2025-04-28 19:02:28,491 - __main__ - INFO - [N/A] - 加载小说数据并处理章节分片...
+2025-04-28 19:02:28,530 - __main__ - INFO - [N/A] - 成功加载小说数据: data/xd_chunks_4096.json, 共850个分片
+2025-04-28 19:02:28,533 - __main__ - INFO - [N/A] - 合并后的章节数量: 374
+2025-04-28 19:02:28,533 - __main__ - INFO - [N/A] - 开始生成预训练数据... 最大上下文长度: 4096, 最大输入token: 2517, 最大输出token: 1078
+2025-04-28 19:02:28,599 - __main__ - INFO - [N/A] - 开始处理章节 1/374: 亵渎 序章 亵渎
+2025-04-28 19:02:28,600 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 开始执行任务 chapter_events
+2025-04-28 19:02:28,600 - __main__ - INFO - [N/A] - 开始执行任务: 事件时间线, 章节: 亵渎 序章 亵渎
+2025-04-28 19:02:28,600 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:02:28,606 - __main__ - INFO - [req_1_1745838148] - 开始生成文本，提示词长度: 4334 字符, 5990 tokens
+2025-04-28 19:02:39,202 - __main__ - INFO - [req_1_1745838148] - 文本生成完成，耗时: 10.59秒，输出长度: 1272 字符, 1490 tokens
+2025-04-28 19:02:39,205 - __main__ - INFO - [N/A] - 任务: 事件时间线, 章节: 亵渎 序章 亵渎, 生成完成, 输出长度: 1490 tokens
+2025-04-28 19:02:39,205 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 任务 chapter_events 完成，耗时: 10.61秒
+2025-04-28 19:02:39,711 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 开始执行任务 alternate_pov
+2025-04-28 19:02:39,711 - __main__ - INFO - [N/A] - 开始执行任务: 配角视角, 章节: 亵渎 序章 亵渎
+2025-04-28 19:02:39,712 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:02:39,719 - __main__ - INFO - [req_2_1745838159] - 开始生成文本，提示词长度: 4365 字符, 6034 tokens
+2025-04-28 19:02:51,963 - __main__ - INFO - [req_2_1745838159] - 文本生成完成，耗时: 12.24秒，输出长度: 998 字符, 1386 tokens
+2025-04-28 19:02:51,968 - __main__ - INFO - [N/A] - 任务: 配角视角, 章节: 亵渎 序章 亵渎, 生成完成, 输出长度: 1386 tokens
+2025-04-28 19:02:51,968 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 任务 alternate_pov 完成，耗时: 12.26秒
+2025-04-28 19:02:52,469 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 开始执行任务 emotion_analysis
+2025-04-28 19:02:52,470 - __main__ - INFO - [N/A] - 开始执行任务: 情感分析, 章节: 亵渎 序章 亵渎
+2025-04-28 19:02:52,470 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:02:52,476 - __main__ - INFO - [req_3_1745838172] - 开始生成文本，提示词长度: 4336 字符, 6012 tokens
+2025-04-28 19:03:06,322 - __main__ - INFO - [req_3_1745838172] - 文本生成完成，耗时: 13.84秒，输出长度: 1253 字符, 1601 tokens
+2025-04-28 19:03:06,328 - __main__ - INFO - [N/A] - 任务: 情感分析, 章节: 亵渎 序章 亵渎, 生成完成, 输出长度: 1601 tokens
+2025-04-28 19:03:06,328 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 任务 emotion_analysis 完成，耗时: 13.86秒
+2025-04-28 19:03:06,832 - __main__ - INFO - [N/A] - 开始处理章节 2/374: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:03:06,834 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 character_dialogue
+2025-04-28 19:03:06,834 - __main__ - INFO - [N/A] - 开始执行任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:03:06,834 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:03:06,838 - __main__ - INFO - [req_4_1745838186] - 开始生成文本，提示词长度: 2953 字符, 3761 tokens
+2025-04-28 19:03:15,907 - __main__ - INFO - [req_4_1745838186] - 文本生成完成，耗时: 9.07秒，输出长度: 615 字符, 753 tokens
+2025-04-28 19:03:15,910 - __main__ - INFO - [N/A] - 任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 753 tokens
+2025-04-28 19:03:15,911 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 character_dialogue 完成，耗时: 9.08秒
+2025-04-28 19:03:16,416 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 location_description
+2025-04-28 19:03:16,416 - __main__ - INFO - [N/A] - 开始执行任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:03:16,416 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:03:16,418 - __main__ - INFO - [req_5_1745838196] - 开始生成文本，提示词长度: 2961 字符, 3769 tokens
+2025-04-28 19:03:27,522 - __main__ - INFO - [req_5_1745838196] - 文本生成完成，耗时: 11.10秒，输出长度: 1237 字符, 1377 tokens
+2025-04-28 19:03:27,528 - __main__ - INFO - [N/A] - 任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 1377 tokens
+2025-04-28 19:03:27,528 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 location_description 完成，耗时: 11.11秒
+2025-04-28 19:03:28,034 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 chapter_summary
+2025-04-28 19:03:28,035 - __main__ - INFO - [N/A] - 开始执行任务: 章节摘要, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:03:28,045 - __main__ - INFO - [N/A] - 任务: 章节摘要, 章节: 亵渎 第一卷 - 第一章 苹果, 原始内容长度: 3640 tokens, 截断后: 2450 tokens
+2025-04-28 19:03:28,045 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:03:28,046 - __main__ - INFO - [req_6_1745838208] - 开始生成文本，提示词长度: 1968 字符, 2517 tokens
+2025-04-28 19:03:33,204 - __main__ - INFO - [req_6_1745838208] - 文本生成完成，耗时: 5.15秒，输出长度: 544 字符, 714 tokens
+2025-04-28 19:03:33,207 - __main__ - INFO - [N/A] - 任务: 章节摘要, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 714 tokens
+2025-04-28 19:03:33,207 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 chapter_summary 完成，耗时: 5.17秒
+2025-04-28 19:03:33,713 - __main__ - INFO - [N/A] - 开始处理章节 3/374: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:03:33,716 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 开始执行任务 character_analysis
+2025-04-28 19:03:33,716 - __main__ - INFO - [N/A] - 开始执行任务: 角色分析, 章节: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:03:33,718 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:03:33,719 - __main__ - INFO - [req_7_1745838213] - 开始生成文本，提示词长度: 2024 字符, 2518 tokens
+2025-04-28 19:03:45,784 - __main__ - INFO - [req_7_1745838213] - 文本生成完成，耗时: 12.06秒，输出长度: 1203 字符, 1371 tokens
+2025-04-28 19:03:45,789 - __main__ - INFO - [N/A] - 任务: 角色分析, 章节: 亵渎 第一卷 - 第二章 造物, 生成完成, 输出长度: 1371 tokens
+2025-04-28 19:03:45,789 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 任务 character_analysis 完成，耗时: 12.07秒
+2025-04-28 19:03:46,295 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 开始执行任务 chapter_qa
+2025-04-28 19:03:46,295 - __main__ - INFO - [N/A] - 开始执行任务: 章节问答对, 章节: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:03:46,296 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:03:46,298 - __main__ - INFO - [req_8_1745838226] - 开始生成文本，提示词长度: 1647 字符, 1980 tokens
+2025-04-28 19:03:55,747 - __main__ - INFO - [req_8_1745838226] - 文本生成完成，耗时: 9.45秒，输出长度: 875 字符, 1027 tokens
+2025-04-28 19:03:55,751 - __main__ - INFO - [N/A] - 任务: 章节问答对, 章节: 亵渎 第一卷 - 第二章 造物, 生成完成, 输出长度: 1027 tokens
+2025-04-28 19:03:55,751 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 任务 chapter_qa 完成，耗时: 9.46秒
+2025-04-28 19:03:56,257 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 开始执行任务 emotion_analysis
+2025-04-28 19:03:56,257 - __main__ - INFO - [N/A] - 开始执行任务: 情感分析, 章节: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:03:56,258 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:03:56,262 - __main__ - INFO - [req_9_1745838236] - 开始生成文本，提示词长度: 2767 字符, 3505 tokens
+2025-04-28 19:04:13,771 - __main__ - INFO - [req_9_1745838236] - 文本生成完成，耗时: 17.50秒，输出长度: 1401 字符, 1514 tokens
+2025-04-28 19:04:13,774 - __main__ - INFO - [N/A] - 任务: 情感分析, 章节: 亵渎 第一卷 - 第二章 造物, 生成完成, 输出长度: 1514 tokens
+2025-04-28 19:04:13,775 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 任务 emotion_analysis 完成，耗时: 17.52秒
+2025-04-28 19:04:14,276 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 开始执行任务 character_dialogue
+2025-04-28 19:04:14,276 - __main__ - INFO - [N/A] - 开始执行任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:04:14,277 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:04:14,280 - __main__ - INFO - [req_10_1745838254] - 开始生成文本，提示词长度: 2780 字符, 3512 tokens
+2025-04-28 19:04:23,007 - __main__ - INFO - [req_10_1745838254] - 文本生成完成，耗时: 8.72秒，输出长度: 687 字符, 832 tokens
+2025-04-28 19:04:23,012 - __main__ - INFO - [N/A] - 任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第二章 造物, 生成完成, 输出长度: 832 tokens
+2025-04-28 19:04:23,012 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 任务 character_dialogue 完成，耗时: 8.74秒
+2025-04-28 19:04:23,516 - __main__ - INFO - [N/A] - 开始处理章节 4/374: 亵渎 第一卷 - 第三章 混战
+2025-04-28 19:04:23,517 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 开始执行任务 chapter_events
+2025-04-28 19:04:23,517 - __main__ - INFO - [N/A] - 开始执行任务: 事件时间线, 章节: 亵渎 第一卷 - 第三章 混战
+2025-04-28 19:04:23,517 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:04:23,521 - __main__ - INFO - [req_11_1745838263] - 开始生成文本，提示词长度: 4171 字符, 5541 tokens
+2025-04-28 19:04:31,523 - __main__ - INFO - [req_11_1745838263] - 文本生成完成，耗时: 8.00秒，输出长度: 906 字符, 971 tokens
+2025-04-28 19:04:31,530 - __main__ - INFO - [N/A] - 任务: 事件时间线, 章节: 亵渎 第一卷 - 第三章 混战, 生成完成, 输出长度: 971 tokens
+2025-04-28 19:04:31,530 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 任务 chapter_events 完成，耗时: 8.01秒
+2025-04-28 19:04:32,036 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 开始执行任务 character_dialogue
+2025-04-28 19:04:32,036 - __main__ - INFO - [N/A] - 开始执行任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第三章 混战
+2025-04-28 19:04:32,037 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:04:32,042 - __main__ - INFO - [req_12_1745838272] - 开始生成文本，提示词长度: 4186 字符, 5570 tokens
+2025-04-28 19:04:40,371 - __main__ - INFO - [req_12_1745838272] - 文本生成完成，耗时: 8.33秒，输出长度: 677 字符, 847 tokens
+2025-04-28 19:04:40,376 - __main__ - INFO - [N/A] - 任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第三章 混战, 生成完成, 输出长度: 847 tokens
+2025-04-28 19:04:40,376 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 任务 character_dialogue 完成，耗时: 8.34秒
+2025-04-28 19:04:40,881 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 开始执行任务 next_chapter_prediction
+2025-04-28 19:04:40,882 - __main__ - INFO - [N/A] - 开始执行任务: 后续预测, 章节: 亵渎 第一卷 - 第三章 混战
+2025-04-28 19:04:40,883 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:04:40,885 - __main__ - INFO - [req_13_1745838280] - 开始生成文本，提示词长度: 1623 字符, 2124 tokens
+2025-04-28 19:04:46,295 - __main__ - INFO - [req_13_1745838280] - 文本生成完成，耗时: 5.41秒，输出长度: 643 字符, 719 tokens
+2025-04-28 19:04:46,298 - __main__ - INFO - [N/A] - 任务: 后续预测, 章节: 亵渎 第一卷 - 第三章 混战, 生成完成, 输出长度: 719 tokens
+2025-04-28 19:04:46,298 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 任务 next_chapter_prediction 完成，耗时: 5.42秒
+2025-04-28 19:04:46,804 - __main__ - INFO - [N/A] - 开始处理章节 5/374: 亵渎 第一卷 - 第四章 筑巢
+2025-04-28 19:04:46,805 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第四章 筑巢': 开始执行任务 alternate_pov
+2025-04-28 19:04:46,805 - __main__ - INFO - [N/A] - 开始执行任务: 配角视角, 章节: 亵渎 第一卷 - 第四章 筑巢
+2025-04-28 19:04:46,806 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:04:46,809 - __main__ - INFO - [req_14_1745838286] - 开始生成文本，提示词长度: 3406 字符, 4310 tokens
+2025-04-28 19:04:55,814 - __main__ - INFO - [req_14_1745838286] - 文本生成完成，耗时: 9.00秒，输出长度: 837 字符, 1043 tokens
+2025-04-28 19:04:55,819 - __main__ - INFO - [N/A] - 任务: 配角视角, 章节: 亵渎 第一卷 - 第四章 筑巢, 生成完成, 输出长度: 1043 tokens
+2025-04-28 19:04:55,820 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第四章 筑巢': 任务 alternate_pov 完成，耗时: 9.01秒
+2025-04-28 19:04:56,325 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第四章 筑巢': 开始执行任务 chapter_events
+2025-04-28 19:04:56,326 - __main__ - INFO - [N/A] - 开始执行任务: 事件时间线, 章节: 亵渎 第一卷 - 第四章 筑巢
+2025-04-28 19:04:56,326 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:04:56,330 - __main__ - INFO - [req_15_1745838296] - 开始生成文本，提示词长度: 3375 字符, 4266 tokens
+2025-04-28 19:05:06,655 - __main__ - INFO - [req_15_1745838296] - 文本生成完成，耗时: 10.32秒，输出长度: 1266 字符, 1275 tokens
+2025-04-28 19:05:06,660 - __main__ - INFO - [N/A] - 任务: 事件时间线, 章节: 亵渎 第一卷 - 第四章 筑巢, 生成完成, 输出长度: 1275 tokens
+2025-04-28 19:05:06,660 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第四章 筑巢': 任务 chapter_events 完成，耗时: 10.33秒
+2025-04-28 19:05:07,165 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第四章 筑巢': 开始执行任务 emotion_analysis
+2025-04-28 19:05:07,166 - __main__ - INFO - [N/A] - 开始执行任务: 情感分析, 章节: 亵渎 第一卷 - 第四章 筑巢
+2025-04-28 19:05:07,166 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:05:07,171 - __main__ - INFO - [req_16_1745838307] - 开始生成文本，提示词长度: 3377 字符, 4288 tokens
+2025-04-28 19:05:20,972 - __main__ - INFO - [req_16_1745838307] - 文本生成完成，耗时: 13.80秒，输出长度: 1322 字符, 1535 tokens
+2025-04-28 19:05:20,977 - __main__ - INFO - [N/A] - 任务: 情感分析, 章节: 亵渎 第一卷 - 第四章 筑巢, 生成完成, 输出长度: 1535 tokens
+2025-04-28 19:05:20,977 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第四章 筑巢': 任务 emotion_analysis 完成，耗时: 13.81秒
+2025-04-28 19:05:21,480 - __main__ - INFO - [N/A] - 开始处理章节 6/374: 亵渎 第一卷 - 第五章 追杀
+2025-04-28 19:05:21,481 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 开始执行任务 next_chapter_prediction
+2025-04-28 19:05:21,481 - __main__ - INFO - [N/A] - 开始执行任务: 后续预测, 章节: 亵渎 第一卷 - 第五章 追杀
+2025-04-28 19:05:21,481 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:05:21,483 - __main__ - INFO - [req_17_1745838321] - 开始生成文本，提示词长度: 1623 字符, 2204 tokens
+2025-04-28 19:05:30,295 - __main__ - INFO - [req_17_1745838321] - 文本生成完成，耗时: 8.81秒，输出长度: 813 字符, 1121 tokens
+2025-04-28 19:05:30,297 - __main__ - INFO - [N/A] - 任务: 后续预测, 章节: 亵渎 第一卷 - 第五章 追杀, 生成完成, 输出长度: 1121 tokens
+2025-04-28 19:05:30,297 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 任务 next_chapter_prediction 完成，耗时: 8.82秒
+2025-04-28 19:05:30,802 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 开始执行任务 location_description
+2025-04-28 19:05:30,803 - __main__ - INFO - [N/A] - 开始执行任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第五章 追杀
+2025-04-28 19:05:30,803 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:05:30,805 - __main__ - INFO - [req_18_1745838330] - 开始生成文本，提示词长度: 2860 字符, 3952 tokens
+2025-04-28 19:05:44,274 - __main__ - INFO - [req_18_1745838330] - 文本生成完成，耗时: 13.47秒，输出长度: 1350 字符, 1580 tokens
+2025-04-28 19:05:44,277 - __main__ - INFO - [N/A] - 任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第五章 追杀, 生成完成, 输出长度: 1580 tokens
+2025-04-28 19:05:44,277 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 任务 location_description 完成，耗时: 13.47秒
+2025-04-28 19:05:44,779 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 开始执行任务 alternate_pov
+2025-04-28 19:05:44,780 - __main__ - INFO - [N/A] - 开始执行任务: 配角视角, 章节: 亵渎 第一卷 - 第五章 追杀
+2025-04-28 19:05:44,780 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:05:44,782 - __main__ - INFO - [req_19_1745838344] - 开始生成文本，提示词长度: 2868 字符, 3959 tokens
+2025-04-28 19:05:59,240 - __main__ - INFO - [req_19_1745838344] - 文本生成完成，耗时: 14.45秒，输出长度: 1200 字符, 1626 tokens
+2025-04-28 19:05:59,243 - __main__ - INFO - [N/A] - 任务: 配角视角, 章节: 亵渎 第一卷 - 第五章 追杀, 生成完成, 输出长度: 1626 tokens
+2025-04-28 19:05:59,243 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 任务 alternate_pov 完成，耗时: 14.46秒
+2025-04-28 19:05:59,746 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 开始执行任务 chapter_qa
+2025-04-28 19:05:59,746 - __main__ - INFO - [N/A] - 开始执行任务: 章节问答对, 章节: 亵渎 第一卷 - 第五章 追杀
+2025-04-28 19:05:59,746 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:05:59,747 - __main__ - INFO - [req_20_1745838359] - 开始生成文本，提示词长度: 1647 字符, 2228 tokens
+2025-04-28 19:06:06,031 - __main__ - INFO - [req_20_1745838359] - 文本生成完成，耗时: 6.28秒，输出长度: 727 字符, 944 tokens
+2025-04-28 19:06:06,033 - __main__ - INFO - [N/A] - 任务: 章节问答对, 章节: 亵渎 第一卷 - 第五章 追杀, 生成完成, 输出长度: 944 tokens
+2025-04-28 19:06:06,034 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 任务 chapter_qa 完成，耗时: 6.29秒
+2025-04-28 19:06:06,537 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 开始执行任务 character_dialogue
+2025-04-28 19:06:06,537 - __main__ - INFO - [N/A] - 开始执行任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第五章 追杀
+2025-04-28 19:06:06,537 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:06:06,538 - __main__ - INFO - [req_21_1745838366] - 开始生成文本，提示词长度: 2852 字符, 3944 tokens
+2025-04-28 19:06:15,114 - __main__ - INFO - [req_21_1745838366] - 文本生成完成，耗时: 8.57秒，输出长度: 637 字符, 791 tokens
+2025-04-28 19:06:15,118 - __main__ - INFO - [N/A] - 任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第五章 追杀, 生成完成, 输出长度: 791 tokens
+2025-04-28 19:06:15,119 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第五章 追杀': 任务 character_dialogue 完成，耗时: 8.58秒
+2025-04-28 19:06:15,625 - __main__ - INFO - [N/A] - 开始处理章节 7/374: 亵渎 第一卷 - 第六章 凋零
+2025-04-28 19:06:15,625 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 开始执行任务 next_chapter_prediction
+2025-04-28 19:06:15,625 - __main__ - INFO - [N/A] - 开始执行任务: 后续预测, 章节: 亵渎 第一卷 - 第六章 凋零
+2025-04-28 19:06:15,626 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:06:15,626 - __main__ - INFO - [req_22_1745838375] - 开始生成文本，提示词长度: 1623 字符, 2135 tokens
+2025-04-28 19:06:24,716 - __main__ - INFO - [req_22_1745838375] - 文本生成完成，耗时: 9.09秒，输出长度: 758 字符, 1014 tokens
+2025-04-28 19:06:24,719 - __main__ - INFO - [N/A] - 任务: 后续预测, 章节: 亵渎 第一卷 - 第六章 凋零, 生成完成, 输出长度: 1014 tokens
+2025-04-28 19:06:24,719 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 任务 next_chapter_prediction 完成，耗时: 9.09秒
+2025-04-28 19:06:25,224 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 开始执行任务 chapter_summary
+2025-04-28 19:06:25,225 - __main__ - INFO - [N/A] - 开始执行任务: 章节摘要, 章节: 亵渎 第一卷 - 第六章 凋零
+2025-04-28 19:06:25,230 - __main__ - INFO - [N/A] - 任务: 章节摘要, 章节: 亵渎 第一卷 - 第六章 凋零, 原始内容长度: 3990 tokens, 截断后: 2449 tokens
+2025-04-28 19:06:25,231 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:06:25,231 - __main__ - INFO - [req_23_1745838385] - 开始生成文本，提示词长度: 1904 字符, 2518 tokens
+2025-04-28 19:06:30,189 - __main__ - INFO - [req_23_1745838385] - 文本生成完成，耗时: 4.96秒，输出长度: 466 字符, 648 tokens
+2025-04-28 19:06:30,194 - __main__ - INFO - [N/A] - 任务: 章节摘要, 章节: 亵渎 第一卷 - 第六章 凋零, 生成完成, 输出长度: 648 tokens
+2025-04-28 19:06:30,194 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 任务 chapter_summary 完成，耗时: 4.97秒
+2025-04-28 19:06:30,699 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 开始执行任务 character_analysis
+2025-04-28 19:06:30,701 - __main__ - INFO - [N/A] - 开始执行任务: 角色分析, 章节: 亵渎 第一卷 - 第六章 凋零
+2025-04-28 19:06:30,706 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:06:30,709 - __main__ - INFO - [req_24_1745838390] - 开始生成文本，提示词长度: 1904 字符, 2518 tokens
+2025-04-28 19:06:42,565 - __main__ - INFO - [req_24_1745838390] - 文本生成完成，耗时: 11.85秒，输出长度: 1326 字符, 1525 tokens
+2025-04-28 19:06:42,568 - __main__ - INFO - [N/A] - 任务: 角色分析, 章节: 亵渎 第一卷 - 第六章 凋零, 生成完成, 输出长度: 1525 tokens
+2025-04-28 19:06:42,568 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 任务 character_analysis 完成，耗时: 11.87秒
+2025-04-28 19:06:43,071 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 开始执行任务 chapter_events
+2025-04-28 19:06:43,072 - __main__ - INFO - [N/A] - 开始执行任务: 事件时间线, 章节: 亵渎 第一卷 - 第六章 凋零
+2025-04-28 19:06:43,072 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:06:43,073 - __main__ - INFO - [req_25_1745838403] - 开始生成文本，提示词长度: 3052 字符, 4084 tokens
+2025-04-28 19:06:55,334 - __main__ - INFO - [req_25_1745838403] - 文本生成完成，耗时: 12.26秒，输出长度: 1363 字符, 1426 tokens
+2025-04-28 19:06:55,339 - __main__ - INFO - [N/A] - 任务: 事件时间线, 章节: 亵渎 第一卷 - 第六章 凋零, 生成完成, 输出长度: 1426 tokens
+2025-04-28 19:06:55,339 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第六章 凋零': 任务 chapter_events 完成，耗时: 12.27秒
+2025-04-28 19:06:55,842 - __main__ - INFO - [N/A] - 开始处理章节 8/374: 亵渎 第一卷 - 第七章 异界
+2025-04-28 19:06:55,843 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 开始执行任务 alternate_pov
+2025-04-28 19:06:55,843 - __main__ - INFO - [N/A] - 开始执行任务: 配角视角, 章节: 亵渎 第一卷 - 第七章 异界
+2025-04-28 19:06:55,843 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:06:55,845 - __main__ - INFO - [req_26_1745838415] - 开始生成文本，提示词长度: 3356 字符, 4301 tokens
+2025-04-28 19:07:06,665 - __main__ - INFO - [req_26_1745838415] - 文本生成完成，耗时: 10.82秒，输出长度: 1051 字符, 1323 tokens
+2025-04-28 19:07:06,668 - __main__ - INFO - [N/A] - 任务: 配角视角, 章节: 亵渎 第一卷 - 第七章 异界, 生成完成, 输出长度: 1323 tokens
+2025-04-28 19:07:06,668 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 任务 alternate_pov 完成，耗时: 10.83秒
+2025-04-28 19:07:07,173 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 开始执行任务 emotion_analysis
+2025-04-28 19:07:07,174 - __main__ - INFO - [N/A] - 开始执行任务: 情感分析, 章节: 亵渎 第一卷 - 第七章 异界
+2025-04-28 19:07:07,174 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:07:07,177 - __main__ - INFO - [req_27_1745838427] - 开始生成文本，提示词长度: 3327 字符, 4279 tokens
+2025-04-28 19:07:17,380 - __main__ - INFO - [req_27_1745838427] - 文本生成完成，耗时: 10.20秒，输出长度: 1303 字符, 1590 tokens
+2025-04-28 19:07:17,384 - __main__ - INFO - [N/A] - 任务: 情感分析, 章节: 亵渎 第一卷 - 第七章 异界, 生成完成, 输出长度: 1590 tokens
+2025-04-28 19:07:17,385 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 任务 emotion_analysis 完成，耗时: 10.21秒
+2025-04-28 19:07:17,890 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 开始执行任务 chapter_qa
+2025-04-28 19:07:17,890 - __main__ - INFO - [N/A] - 开始执行任务: 章节问答对, 章节: 亵渎 第一卷 - 第七章 异界
+2025-04-28 19:07:17,890 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:07:17,891 - __main__ - INFO - [req_28_1745838437] - 开始生成文本，提示词长度: 1647 字符, 2057 tokens
+2025-04-28 19:07:26,307 - __main__ - INFO - [req_28_1745838437] - 文本生成完成，耗时: 8.41秒，输出长度: 733 字符, 854 tokens
+2025-04-28 19:07:26,311 - __main__ - INFO - [N/A] - 任务: 章节问答对, 章节: 亵渎 第一卷 - 第七章 异界, 生成完成, 输出长度: 854 tokens
+2025-04-28 19:07:26,311 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 任务 chapter_qa 完成，耗时: 8.42秒
+2025-04-28 19:07:26,816 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 开始执行任务 location_description
+2025-04-28 19:07:26,817 - __main__ - INFO - [N/A] - 开始执行任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第七章 异界
+2025-04-28 19:07:26,818 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:07:26,823 - __main__ - INFO - [req_29_1745838446] - 开始生成文本，提示词长度: 3348 字符, 4294 tokens
+2025-04-28 19:07:37,352 - __main__ - INFO - [req_29_1745838446] - 文本生成完成，耗时: 10.52秒，输出长度: 1131 字符, 1359 tokens
+2025-04-28 19:07:37,358 - __main__ - INFO - [N/A] - 任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第七章 异界, 生成完成, 输出长度: 1359 tokens
+2025-04-28 19:07:37,358 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 任务 location_description 完成，耗时: 10.54秒
+2025-04-28 19:07:37,864 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 开始执行任务 next_chapter_prediction
+2025-04-28 19:07:37,864 - __main__ - INFO - [N/A] - 开始执行任务: 后续预测, 章节: 亵渎 第一卷 - 第七章 异界
+2025-04-28 19:07:37,864 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:07:37,865 - __main__ - INFO - [req_30_1745838457] - 开始生成文本，提示词长度: 1623 字符, 2033 tokens
+2025-04-28 19:07:45,305 - __main__ - INFO - [req_30_1745838457] - 文本生成完成，耗时: 7.44秒，输出长度: 1087 字符, 1355 tokens
+2025-04-28 19:07:45,308 - __main__ - INFO - [N/A] - 任务: 后续预测, 章节: 亵渎 第一卷 - 第七章 异界, 生成完成, 输出长度: 1355 tokens
+2025-04-28 19:07:45,308 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第七章 异界': 任务 next_chapter_prediction 完成，耗时: 7.44秒
+2025-04-28 19:07:45,814 - __main__ - INFO - [N/A] - 开始处理章节 9/374: 亵渎 第一卷 - 第八章　晨星
+2025-04-28 19:07:45,815 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第八章　晨星': 开始执行任务 location_description
+2025-04-28 19:07:45,815 - __main__ - INFO - [N/A] - 开始执行任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第八章　晨星
+2025-04-28 19:07:45,816 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:07:45,821 - __main__ - INFO - [req_31_1745838465] - 开始生成文本，提示词长度: 4428 字符, 5800 tokens
+2025-04-28 19:07:58,981 - __main__ - INFO - [N/A] - 自动计算的参数: 最大输入tokens=2517, 最大输出tokens=1078
+2025-04-28 19:07:59,130 - __main__ - INFO - [N/A] - 加载小说数据并处理章节分片...
+2025-04-28 19:07:59,158 - __main__ - INFO - [N/A] - 成功加载小说数据: data/xd_chunks_4096.json, 共850个分片
+2025-04-28 19:07:59,162 - __main__ - INFO - [N/A] - 合并后的章节数量: 374
+2025-04-28 19:07:59,162 - __main__ - INFO - [N/A] - 开始生成预训练数据... 最大上下文长度: 4096, 最大输入token: 2517, 最大输出token: 1078
+2025-04-28 19:07:59,220 - __main__ - INFO - [N/A] - 开始处理章节 1/374: 亵渎 序章 亵渎
+2025-04-28 19:07:59,221 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 开始执行任务 alternate_pov
+2025-04-28 19:07:59,221 - __main__ - INFO - [N/A] - 开始执行任务: 配角视角, 章节: 亵渎 序章 亵渎
+2025-04-28 19:07:59,221 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:07:59,225 - __main__ - INFO - [req_1_1745838479] - 开始生成文本，提示词长度: 4365 字符, 6034 tokens
+2025-04-28 19:08:10,113 - __main__ - INFO - [req_1_1745838479] - 文本生成完成，耗时: 10.89秒，输出长度: 995 字符, 1371 tokens
+2025-04-28 19:08:10,117 - __main__ - INFO - [N/A] - 任务: 配角视角, 章节: 亵渎 序章 亵渎, 生成完成, 输出长度: 1371 tokens
+2025-04-28 19:08:10,117 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 任务 alternate_pov 完成，耗时: 10.90秒
+2025-04-28 19:08:10,623 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 开始执行任务 next_chapter_prediction
+2025-04-28 19:08:10,623 - __main__ - INFO - [N/A] - 开始执行任务: 后续预测, 章节: 亵渎 序章 亵渎
+2025-04-28 19:08:10,625 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:08:10,628 - __main__ - INFO - [req_2_1745838490] - 开始生成文本，提示词长度: 1616 字符, 2175 tokens
+2025-04-28 19:08:19,549 - __main__ - INFO - [req_2_1745838490] - 文本生成完成，耗时: 8.92秒，输出长度: 919 字符, 1124 tokens
+2025-04-28 19:08:19,552 - __main__ - INFO - [N/A] - 任务: 后续预测, 章节: 亵渎 序章 亵渎, 生成完成, 输出长度: 1124 tokens
+2025-04-28 19:08:19,552 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 任务 next_chapter_prediction 完成，耗时: 8.93秒
+2025-04-28 19:08:20,058 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 开始执行任务 chapter_summary
+2025-04-28 19:08:20,059 - __main__ - INFO - [N/A] - 开始执行任务: 章节摘要, 章节: 亵渎 序章 亵渎
+2025-04-28 19:08:20,069 - __main__ - INFO - [N/A] - 任务: 章节摘要, 章节: 亵渎 序章 亵渎, 原始内容长度: 5901 tokens, 截断后: 2454 tokens
+2025-04-28 19:08:20,069 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:08:20,070 - __main__ - INFO - [req_3_1745838500] - 开始生成文本，提示词长度: 1826 字符, 2518 tokens
+2025-04-28 19:08:29,306 - __main__ - INFO - [req_3_1745838500] - 文本生成完成，耗时: 9.23秒，输出长度: 697 字符, 1024 tokens
+2025-04-28 19:08:29,310 - __main__ - INFO - [N/A] - 任务: 章节摘要, 章节: 亵渎 序章 亵渎, 生成完成, 输出长度: 1024 tokens
+2025-04-28 19:08:29,311 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 任务 chapter_summary 完成，耗时: 9.25秒
+2025-04-28 19:08:29,815 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 开始执行任务 emotion_analysis
+2025-04-28 19:08:29,816 - __main__ - INFO - [N/A] - 开始执行任务: 情感分析, 章节: 亵渎 序章 亵渎
+2025-04-28 19:08:29,816 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:08:29,818 - __main__ - INFO - [req_4_1745838509] - 开始生成文本，提示词长度: 4336 字符, 6012 tokens
+2025-04-28 19:08:47,035 - __main__ - INFO - [req_4_1745838509] - 文本生成完成，耗时: 17.21秒，输出长度: 1215 字符, 1635 tokens
+2025-04-28 19:08:47,039 - __main__ - INFO - [N/A] - 任务: 情感分析, 章节: 亵渎 序章 亵渎, 生成完成, 输出长度: 1635 tokens
+2025-04-28 19:08:47,040 - __main__ - INFO - [N/A] - 章节 '亵渎 序章 亵渎': 任务 emotion_analysis 完成，耗时: 17.22秒
+2025-04-28 19:08:47,547 - __main__ - INFO - [N/A] - 开始处理章节 2/374: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:08:47,548 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 character_dialogue
+2025-04-28 19:08:47,548 - __main__ - INFO - [N/A] - 开始执行任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:08:47,548 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:08:47,552 - __main__ - INFO - [req_5_1745838527] - 开始生成文本，提示词长度: 2953 字符, 3761 tokens
+2025-04-28 19:08:55,328 - __main__ - INFO - [req_5_1745838527] - 文本生成完成，耗时: 7.77秒，输出长度: 792 字符, 977 tokens
+2025-04-28 19:08:55,335 - __main__ - INFO - [N/A] - 任务: 角色对话扩展, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 977 tokens
+2025-04-28 19:08:55,335 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 character_dialogue 完成，耗时: 7.79秒
+2025-04-28 19:08:55,841 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 emotion_analysis
+2025-04-28 19:08:55,841 - __main__ - INFO - [N/A] - 开始执行任务: 情感分析, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:08:55,842 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:08:55,846 - __main__ - INFO - [req_6_1745838535] - 开始生成文本，提示词长度: 2940 字符, 3754 tokens
+2025-04-28 19:09:08,879 - __main__ - INFO - [req_6_1745838535] - 文本生成完成，耗时: 13.03秒，输出长度: 1377 字符, 1622 tokens
+2025-04-28 19:09:08,885 - __main__ - INFO - [N/A] - 任务: 情感分析, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 1622 tokens
+2025-04-28 19:09:08,886 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 emotion_analysis 完成，耗时: 13.04秒
+2025-04-28 19:09:09,388 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 chapter_events
+2025-04-28 19:09:09,389 - __main__ - INFO - [N/A] - 开始执行任务: 事件时间线, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:09:09,390 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:09:09,395 - __main__ - INFO - [req_7_1745838549] - 开始生成文本，提示词长度: 2938 字符, 3732 tokens
+2025-04-28 19:09:21,615 - __main__ - INFO - [req_7_1745838549] - 文本生成完成，耗时: 12.22秒，输出长度: 1355 字符, 1388 tokens
+2025-04-28 19:09:21,620 - __main__ - INFO - [N/A] - 任务: 事件时间线, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 1388 tokens
+2025-04-28 19:09:21,620 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 chapter_events 完成，耗时: 12.23秒
+2025-04-28 19:09:22,125 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 chapter_qa
+2025-04-28 19:09:22,126 - __main__ - INFO - [N/A] - 开始执行任务: 章节问答对, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:09:22,127 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:09:22,130 - __main__ - INFO - [req_8_1745838562] - 开始生成文本，提示词长度: 1647 字符, 2058 tokens
+2025-04-28 19:09:27,769 - __main__ - INFO - [req_8_1745838562] - 文本生成完成，耗时: 5.64秒，输出长度: 773 字符, 927 tokens
+2025-04-28 19:09:27,772 - __main__ - INFO - [N/A] - 任务: 章节问答对, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 927 tokens
+2025-04-28 19:09:27,772 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 chapter_qa 完成，耗时: 5.65秒
+2025-04-28 19:09:28,276 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 开始执行任务 location_description
+2025-04-28 19:09:28,276 - __main__ - INFO - [N/A] - 开始执行任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第一章 苹果
+2025-04-28 19:09:28,277 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:09:28,278 - __main__ - INFO - [req_9_1745838568] - 开始生成文本，提示词长度: 2961 字符, 3769 tokens
+2025-04-28 19:09:42,386 - __main__ - INFO - [req_9_1745838568] - 文本生成完成，耗时: 14.10秒，输出长度: 1359 字符, 1659 tokens
+2025-04-28 19:09:42,392 - __main__ - INFO - [N/A] - 任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第一章 苹果, 生成完成, 输出长度: 1659 tokens
+2025-04-28 19:09:42,392 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第一章 苹果': 任务 location_description 完成，耗时: 14.12秒
+2025-04-28 19:09:42,900 - __main__ - INFO - [N/A] - 开始处理章节 3/374: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:09:42,901 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 开始执行任务 chapter_events
+2025-04-28 19:09:42,901 - __main__ - INFO - [N/A] - 开始执行任务: 事件时间线, 章节: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:09:42,902 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:09:42,906 - __main__ - INFO - [req_10_1745838582] - 开始生成文本，提示词长度: 2765 字符, 3483 tokens
+2025-04-28 19:09:50,468 - __main__ - INFO - [req_10_1745838582] - 文本生成完成，耗时: 7.56秒，输出长度: 888 字符, 912 tokens
+2025-04-28 19:09:50,471 - __main__ - INFO - [N/A] - 任务: 事件时间线, 章节: 亵渎 第一卷 - 第二章 造物, 生成完成, 输出长度: 912 tokens
+2025-04-28 19:09:50,471 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 任务 chapter_events 完成，耗时: 7.57秒
+2025-04-28 19:09:50,976 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 开始执行任务 chapter_qa
+2025-04-28 19:09:50,977 - __main__ - INFO - [N/A] - 开始执行任务: 章节问答对, 章节: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:09:50,977 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:09:50,978 - __main__ - INFO - [req_11_1745838590] - 开始生成文本，提示词长度: 1647 字符, 1980 tokens
+2025-04-28 19:09:58,639 - __main__ - INFO - [req_11_1745838590] - 文本生成完成，耗时: 7.66秒，输出长度: 848 字符, 974 tokens
+2025-04-28 19:09:58,643 - __main__ - INFO - [N/A] - 任务: 章节问答对, 章节: 亵渎 第一卷 - 第二章 造物, 生成完成, 输出长度: 974 tokens
+2025-04-28 19:09:58,643 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 任务 chapter_qa 完成，耗时: 7.67秒
+2025-04-28 19:09:59,147 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 开始执行任务 emotion_analysis
+2025-04-28 19:09:59,148 - __main__ - INFO - [N/A] - 开始执行任务: 情感分析, 章节: 亵渎 第一卷 - 第二章 造物
+2025-04-28 19:09:59,148 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:09:59,151 - __main__ - INFO - [req_12_1745838599] - 开始生成文本，提示词长度: 2767 字符, 3505 tokens
+2025-04-28 19:10:14,609 - __main__ - INFO - [req_12_1745838599] - 文本生成完成，耗时: 15.45秒，输出长度: 1328 字符, 1559 tokens
+2025-04-28 19:10:14,613 - __main__ - INFO - [N/A] - 任务: 情感分析, 章节: 亵渎 第一卷 - 第二章 造物, 生成完成, 输出长度: 1559 tokens
+2025-04-28 19:10:14,614 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第二章 造物': 任务 emotion_analysis 完成，耗时: 15.47秒
+2025-04-28 19:10:15,120 - __main__ - INFO - [N/A] - 开始处理章节 4/374: 亵渎 第一卷 - 第三章 混战
+2025-04-28 19:10:15,120 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 开始执行任务 character_analysis
+2025-04-28 19:10:15,120 - __main__ - INFO - [N/A] - 开始执行任务: 角色分析, 章节: 亵渎 第一卷 - 第三章 混战
+2025-04-28 19:10:15,124 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:10:15,125 - __main__ - INFO - [req_13_1745838615] - 开始生成文本，提示词长度: 1893 字符, 2518 tokens
+2025-04-28 19:10:27,477 - __main__ - INFO - [req_13_1745838615] - 文本生成完成，耗时: 12.35秒，输出长度: 1420 字符, 1563 tokens
+2025-04-28 19:10:27,480 - __main__ - INFO - [N/A] - 任务: 角色分析, 章节: 亵渎 第一卷 - 第三章 混战, 生成完成, 输出长度: 1563 tokens
+2025-04-28 19:10:27,481 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 任务 character_analysis 完成，耗时: 12.36秒
+2025-04-28 19:10:27,986 - __main__ - INFO - [N/A] - 章节 '亵渎 第一卷 - 第三章 混战': 开始执行任务 location_description
+2025-04-28 19:10:27,986 - __main__ - INFO - [N/A] - 开始执行任务: 场景分析与描述, 章节: 亵渎 第一卷 - 第三章 混战
+2025-04-28 19:10:27,987 - __main__ - INFO - [N/A] - Starting call to '__main__.NovelPretrainGenerator._generate_text', this is the 1st time calling it.
+2025-04-28 19:10:27,991 - __main__ - INFO - [req_14_1745838627] - 开始生成文本，提示词长度: 4194 字符, 5578 tokens
