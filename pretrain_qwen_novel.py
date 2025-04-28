@@ -305,13 +305,9 @@ def print_training_config(args, model_config, train_dataset, is_distributed):
     # 使用简单的分隔线
     separator = "-" * 80
 
-     # 计算有效批次大小,兼容单卡
-    if is_distributed:
-        world_size = torch.distributed.get_world_size()
-        effective_batch_size = args.per_device_train_batch_size * world_size * args.gradient_accumulation_steps
-    else:
-        effective_batch_size = args.per_device_train_batch_size * args.gradient_accumulation_steps
-    
+    # 计算有效批次大小,兼容单卡
+    effective_batch_size = args.per_device_train_batch_size * gpu_count * args.gradient_accumulation_steps
+
     # 打印基本信息
     print("\n\n")
     print(separator)
@@ -521,11 +517,6 @@ def main():
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
     )
-    # 检查是否真正使用了多GPU训练
-    if not hasattr(model, "module"):  # 检查是否被DDP或DataParallel包装
-        # 未使用多GPU训练，强制n_gpu=1
-        training_args._n_gpu = 1
-        logger.warning("检测到代码未正确设置多GPU训练，强制使用单GPU模式计算批次大小")
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
     
@@ -551,11 +542,11 @@ def main():
     logger.info("开始训练...")
     
     # 强制同步所有进程时指定设备
-    if is_distributed:
-        # 获取当前设备ID
-        device_id = torch.cuda.current_device()
-        # 明确指定设备进行barrier操作
-        torch.distributed.barrier(device_ids=[device_id])
+    # if is_distributed:
+    #     # 获取当前设备ID
+    #     device_id = torch.cuda.current_device()
+    #     # 明确指定设备进行barrier操作
+    #     torch.distributed.barrier(device_ids=[device_id])
     
     train_result = trainer.train()
     
