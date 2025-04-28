@@ -19,11 +19,19 @@ def load_model_and_tokenizer(model_path, lora_path=None, quantization=None, gpu_
     
     # 量化设置
     if quantization == "4bit":
-        load_kwargs["load_in_4bit"] = True
-        load_kwargs["quantization_config"] = {"load_in_4bit": True, "bnb_4bit_compute_dtype": torch.float16}
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4"
+        )
         print("使用4位量化加载模型")
     elif quantization == "8bit":
-        load_kwargs["load_in_8bit"] = True
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_8bit=True
+        )
         print("使用8位量化加载模型")
     else:
         load_kwargs["torch_dtype"] = torch.float16
