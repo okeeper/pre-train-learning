@@ -165,13 +165,13 @@ def parse_args():
         choices=["all", "gradients", "parameters", "False"],
         help="wandb的watch级别 (default: gradients)",
     )
-    parser.add_argument(
-        "--local-rank",
-        type=int,
-        dest="local_rank",  # 指向同一个目标变量
-        default=-1,
-        help=argparse.SUPPRESS,  # 在帮助信息中隐藏这个重复参数
-    )
+    # parser.add_argument(
+    #     "--local-rank",
+    #     type=int,
+    #     dest="local_rank",  # 指向同一个目标变量
+    #     default=-1,
+    #     help=argparse.SUPPRESS,  # 在帮助信息中隐藏这个重复参数
+    # )
     # 这是关键变化：torchrun使用RANK和WORLD_SIZE环境变量
     parser.add_argument(
         "--local_rank",
