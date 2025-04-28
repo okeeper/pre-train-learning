@@ -23,6 +23,9 @@ import jsonlines
 import openai
 from tenacity import retry, stop_after_attempt, wait_exponential, before_log, after_log
 import tiktoken
+import concurrent.futures
+from threading import Lock
+import queue
 
 # 增强日志配置，添加请求ID
 logging.basicConfig(
@@ -58,6 +61,8 @@ class NovelPretrainGenerator:
         max_length: int = 8000,
         temperature: float = 0.7,
         log_level: str = "INFO",
+        max_workers: int = 5,  # 新增参数：最大工作线程数
+        resume_from: str = None,  # 添加新参数：从指定章节标题恢复
     ):
         """初始化生成器
         
@@ -71,6 +76,8 @@ class NovelPretrainGenerator:
             max_length: 生成文本的最大长度(包括输入和输出)
             temperature: 生成温度
             log_level: 日志级别
+            max_workers: 最大并行工作线程数
+            resume_from: 从指定章节标题恢复处理
         """
         self.input_file = input_file
         self.output_dir = output_dir
@@ -106,10 +113,9 @@ class NovelPretrainGenerator:
         # 请求计数器，用于生成唯一的请求ID
         self.request_counter = 0
         
-        # 加载小说数据并合并章节分片
-        logger.info("加载小说数据并处理章节分片...")
-        self.novel_data = self._load_novel_data()
-        self.merged_chapters = self._merge_chapter_chunks()
+        # 加载小说数据但不合并章节分片
+        logger.info("加载小说数据...")
+        self.chunks = self._load_novel_data()
         
         # 定义扩充任务列表
         self.augmentation_tasks = [
@@ -128,49 +134,33 @@ class NovelPretrainGenerator:
         numeric_level = getattr(logging, log_level.upper(), None)
         if isinstance(numeric_level, int):
             logger.setLevel(numeric_level)
+        
+        self.max_workers = max_workers
+        logger.info(f"设置最大并行线程数: {max_workers}")
+        
+        # 添加线程安全的计数器和锁
+        self.generated_count = 0
+        self.lock = Lock()
+        
+        # 用于存储结果的队列
+        self.result_queue = queue.Queue()
+        
+        self.resume_from = resume_from
+        if resume_from:
+            logger.info(f"将从章节标题 '{resume_from}' 恢复处理")
     
     def _load_novel_data(self) -> List[Dict[str, Any]]:
         """加载小说数据"""
         try:
             with open(self.input_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            logger.info(f"成功加载小说数据: {self.input_file}, 共{len(data)}个分片")
-            return data
+            # 过滤掉非字典对象
+            chunks = [chunk for chunk in data if isinstance(chunk, dict)]
+            logger.info(f"成功加载小说数据: {self.input_file}, 共{len(chunks)}个有效分片")
+            return chunks
         except Exception as e:
             logger.error(f"加载小说数据失败: {e}")
             raise
-    
-    def _merge_chapter_chunks(self) -> List[Dict[str, Any]]:
-        """合并属于同一章节的分片"""
-        chapter_map = {}
-        pattern = re.compile(r'(.*?)(\(\d+\))$')  # 匹配章节标题后的(1)、(2)等
-        
-        for chunk in self.novel_data:
-            if not isinstance(chunk, dict):
-                continue
-                
-            title = chunk.get("chapter_title", "")
-            content = chunk.get("content", "")
-            
-            # 提取基础章节标题（去除(1)、(2)等后缀）
-            match = pattern.match(title)
-            base_title = match.group(1).strip() if match else title
-            
-            if base_title not in chapter_map:
-                chapter_map[base_title] = {
-                    "chapter_title": base_title,
-                    "content": content,
-                    "chunks": [chunk],
-                    "chunk_titles": [title]
-                }
-            else:
-                chapter_map[base_title]["content"] += "\n" + content
-                chapter_map[base_title]["chunks"].append(chunk)
-                chapter_map[base_title]["chunk_titles"].append(title)
-        
-        merged_chapters = list(chapter_map.values())
-        logger.info(f"合并后的章节数量: {len(merged_chapters)}")
-        return merged_chapters
     
     @retry(
         stop=stop_after_attempt(3), 
@@ -196,11 +186,6 @@ class NovelPretrainGenerator:
         print("-"*80)
         print(prompt)
         print("="*80 + "\n")
-        
-        # 记录详细的输入内容到文件
-        input_log_file = os.path.join(self.log_dir, f"input_{request_id}.txt")
-        with open(input_log_file, 'w', encoding='utf-8') as f:
-            f.write(prompt)
         
         start_time = time.time()
         
@@ -231,27 +216,6 @@ class NovelPretrainGenerator:
             print("-"*80)
             print(output_text)
             print("="*80 + "\n")
-            
-            # 记录详细的输出内容到文件
-            output_log_file = os.path.join(self.log_dir, f"output_{request_id}.txt")
-            with open(output_log_file, 'w', encoding='utf-8') as f:
-                f.write(output_text)
-            
-            # 记录请求和响应的摘要信息
-            summary_log_file = os.path.join(self.log_dir, f"summary_{request_id}.json")
-            with open(summary_log_file, 'w', encoding='utf-8') as f:
-                summary = {
-                    "request_id": request_id,
-                    "model": self.openai_model,
-                    "temperature": self.temperature,
-                    "input_length": len(prompt),
-                    "input_tokens": len(self._tokenize(prompt)),
-                    "output_length": len(output_text),
-                    "output_tokens": output_tokens,
-                    "generation_time": generation_time,
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                }
-                json.dump(summary, f, ensure_ascii=False, indent=2)
             
             return output_text
             
@@ -321,101 +285,86 @@ class NovelPretrainGenerator:
             return self.encoder.decode(truncated_tokens)
     
     def generate_data(self) -> None:
-        """生成预训练数据"""
+        """生成预训练数据，使用多线程并行处理每个chunk，支持从指定章节恢复"""
         logger.info(f"开始生成预训练数据... 最大上下文长度: {self.max_length}, 最大输入token: {self.max_input_tokens}, 最大输出token: {self.max_output_tokens}")
+        logger.info(f"使用 {self.max_workers} 个线程并行处理")
         
         # 创建C4格式输出文件
         output_file = os.path.join(self.output_dir, "novel_pretrain_data.jsonl")
         
-        generated_count = 0
+        # 重置生成计数器
+        self.generated_count = 0
         
-        # 对每个合并后的章节进行处理
-        with jsonlines.open(output_file, mode='w') as writer:
-            # 首先保存原始章节内容 (C4格式)
-            for chapter in tqdm(self.merged_chapters, desc="处理原始章节"):
-                # 保存原始内容
-                writer.write({
-                    "text": chapter["content"],
-                    "meta": {
-                        "url": f"novel_chapter_{generated_count}",
-                        "source": "original_text",
-                        "title": chapter["chapter_title"]
-                    }
-                })
-                generated_count += 1
+        # 如果需要恢复处理，找到起始索引
+        start_index = 0
+        if self.resume_from:
+            for i, chunk in enumerate(self.chunks):
+                if chunk.get("chapter_title", "") == self.resume_from:
+                    start_index = i
+                    logger.info(f"找到恢复点: 章节标题 '{self.resume_from}' 在索引 {start_index}")
+                    break
+            else:
+                logger.warning(f"未找到指定的章节标题 '{self.resume_from}'，将从头开始处理")
+        
+        # 确定处理模式
+        mode = 'a' if start_index > 0 and os.path.exists(output_file) else 'w'
+        if mode == 'a':
+            logger.info(f"将在现有输出文件 {output_file} 中追加数据")
+        else:
+            logger.info(f"将创建新的输出文件 {output_file}")
             
-            # 然后进行数据扩充
-            for i, chapter in enumerate(tqdm(self.merged_chapters, desc="数据扩充")):
-                title = chapter["chapter_title"]
-                logger.info(f"开始处理章节 {i+1}/{len(self.merged_chapters)}: {title}")
-                full_content = chapter["content"]
-                
-                # 获取上下文信息
-                prev_chapter = self.merged_chapters[i-1] if i > 0 else None
-                next_chapter = self.merged_chapters[i+1] if i < len(self.merged_chapters)-1 else None
-                
-                prev_text = prev_chapter["content"] if prev_chapter else ""
-                next_text = next_chapter["content"] if next_chapter else ""
-                
-                # 准备章节上下文信息 - 不进行截断，保留完整内容
-                chapter_contexts = {
-                    "basic": full_content,  # 基本上下文
-                    "with_end": full_content,  # 与基本相同，在任务中根据需要决定是否保留末尾
-                    "with_prev": self._prepare_context_with_prev_full(full_content, prev_text),  # 包含前一章节的上下文
-                    "with_next": self._prepare_context_with_next_full(full_content, next_text),  # 包含后一章节的上下文
-                }
-                
-                # 对当前章节应用随机3-5个扩充任务
-                num_tasks = random.randint(3, 5)
-                selected_tasks = random.sample(self.augmentation_tasks, num_tasks)
-                
-                # 执行每个扩充任务
-                for task_func in selected_tasks:
-                    task_name = task_func.__name__.replace("_generate_", "")
-                    try:
-                        logger.info(f"章节 '{title}': 开始执行任务 {task_name}")
-                        start_time = time.time()
+        # 创建线程池
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # 只提交从start_index开始的分片处理任务
+            future_to_chunk = {
+                executor.submit(self._process_chunk, i, chunk): (i, chunk) 
+                for i, chunk in enumerate(self.chunks[start_index:], start=start_index)
+            }
+            
+            # 创建进度条
+            with tqdm(total=len(future_to_chunk), desc="处理分片进度") as pbar:
+                # 创建输出文件写入器
+                with jsonlines.open(output_file, mode=mode) as writer:
+                    # 处理完成的任务
+                    for future in concurrent.futures.as_completed(future_to_chunk):
+                        i, chunk = future_to_chunk[future]
+                        title = chunk.get("chapter_title", f"无标题分片_{i}")
                         
-                        # 根据任务类型选择适当的上下文
-                        context_type = self._select_context_for_task(task_func.__name__)
-                        context = chapter_contexts[context_type]
-                        
-                        # 使用选定的上下文执行任务
-                        augmented_data = task_func(context, title, prev_text, next_text)
-                        if augmented_data:
-                            writer.write(augmented_data)
-                            generated_count += 1
-                        
-                        # 记录任务完成信息
-                        end_time = time.time()
-                        logger.info(f"章节 '{title}': 任务 {task_name} 完成，耗时: {end_time - start_time:.2f}秒")
-                    except Exception as e:
-                        logger.error(f"章节 '{title}': 执行任务 {task_name} 失败: {e}")
-                        continue
-                    
-                    # 短暂休息，避免模型过载
-                    time.sleep(0.5)
+                        try:
+                            # 获取该分片的所有结果
+                            results = future.result()
+                            
+                            # 写入结果到文件
+                            for result in results:
+                                writer.write(result)
+                            
+                            # 更新进度条
+                            pbar.update(1)
+                            pbar.set_description(f"已处理: {title}")
+                            
+                        except Exception as e:
+                            logger.error(f"处理分片 {title} 时发生错误: {e}")
+                            pbar.update(1)
         
-        logger.info(f"预训练数据生成完成，共生成 {generated_count} 条数据，保存至: {output_file}")
+        logger.info(f"预训练数据生成完成，共生成 {self.generated_count} 条数据，保存至: {output_file}")
     
-    
-    def _prepare_context_with_prev_full(self, current_text: str, prev_text: str) -> str:
-        """准备包含前一章节摘要的上下文（不截断）"""
+    def _prepare_context_with_prev_simple(self, current_text: str, prev_text: str) -> str:
+        """准备包含前一分片摘要的简单上下文"""
         if not prev_text:
             return current_text
         
-        # 对前一章节进行摘要
+        # 对前一分片进行摘要
         prev_summary = self._generate_quick_summary(prev_text)
-        return f"前一章节摘要: {prev_summary}\n\n当前章节内容:\n{current_text}"
+        return f"前一分片摘要: {prev_summary}\n\n当前内容:\n{current_text}"
     
-    def _prepare_context_with_next_full(self, current_text: str, next_text: str) -> str:
-        """准备包含后一章节摘要的上下文（不截断）"""
+    def _prepare_context_with_next_simple(self, current_text: str, next_text: str) -> str:
+        """准备包含后一分片摘要的简单上下文"""
         if not next_text:
             return current_text
         
-        # 对后一章节进行摘要
+        # 对后一分片进行摘要
         next_summary = self._generate_quick_summary(next_text)
-        return f"{current_text}\n\n后一章节摘要: {next_summary}"
+        return f"{current_text}\n\n后一分片摘要: {next_summary}"
     
     def _generate_quick_summary(self, text: str) -> str:
         """快速生成文本摘要，无需调用模型"""
@@ -453,41 +402,41 @@ class NovelPretrainGenerator:
         return lines[0] if lines else "无标题章节"
     
     def _generate_chapter_summary(self, text: str, title: str, prev_text: str, next_text: str) -> Dict[str, Any]:
-        """生成章节摘要"""
-        task_name = "章节摘要"
-        logger.info(f"开始执行任务: {task_name}, 章节: {title}")
+        """生成分片摘要"""
+        task_name = "分片摘要"
+        logger.info(f"开始执行任务: {task_name}, 分片: {title}")
         
         # 计算提示词的预估token长度
-        prompt_template = f"""请对以下小说章节进行详细总结，包括主要情节、人物行动和关键事件。
+        prompt_template = f"""请对以下小说分片进行详细总结，包括主要情节、人物行动和关键事件。
 
-章节标题: {title}
+分片标题: {title}
 
-章节内容:
+分片内容:
 {{text}}
 
 请提供一个全面的总结:"""
         
-        # 计算提示词模板的token数（不包括章节内容）
+        # 计算提示词模板的token数（不包括分片内容）
         prompt_tokens = len(self._tokenize(prompt_template.format(text="")))
         
-        # 计算可用于章节内容的token数
+        # 计算可用于分片内容的token数
         available_tokens = self.max_input_tokens - prompt_tokens
         
-        # 对章节内容进行截断
-        truncated_text = self._smart_truncate(text, available_tokens)
-        logger.info(f"任务: {task_name}, 章节: {title}, 原始内容长度: {len(self._tokenize(text))} tokens, 截断后: {len(self._tokenize(truncated_text))} tokens")
+        # 对分片内容进行截断
+        #truncated_text = self._smart_truncate(text, available_tokens)
+        logger.info(f"任务: {task_name}, 分片: {title}, 原始内容长度: {len(self._tokenize(text))} tokens, 截断后: {len(self._tokenize(truncated_text))} tokens")
         
         # 组装完整提示词
-        prompt = prompt_template.format(text=truncated_text)
+        prompt = prompt_template.format(text=text)
 
         summary = self._generate_text(prompt)
-        logger.info(f"任务: {task_name}, 章节: {title}, 生成完成, 输出长度: {len(self._tokenize(summary))} tokens")
+        logger.info(f"任务: {task_name}, 分片: {title}, 生成完成, 输出长度: {len(self._tokenize(summary))} tokens")
         
         return {
-            "text": f"《{title}》章节总结: {summary}",
+            "text": f"《{title}》分片摘要: {summary}",
             "meta": {
                 "url": f"novel_summary_{title}",
-                "source": "chapter_summary",
+                "source": "chunk_summary",
                 "title": title
             }
         }
@@ -495,33 +444,33 @@ class NovelPretrainGenerator:
     def _generate_character_analysis(self, text: str, title: str, prev_text: str, next_text: str) -> Dict[str, Any]:
         """生成角色分析"""
         task_name = "角色分析"
-        logger.info(f"开始执行任务: {task_name}, 章节: {title}")
+        logger.info(f"开始执行任务: {task_name}, 分片: {title}")
         
         # 计算提示词模板
-        prompt_template = f"""请分析以下小说章节中出现的主要人物，包括他们的特点、动机、行为和关系。
+        prompt_template = f"""请分析以下小说分片中出现的主要人物，包括他们的特点、动机、行为和关系。
 
-章节标题: {title}
+分片标题: {title}
 
-章节内容:
+分片内容:
 {{text}}
 
 请提供详细的角色分析:"""
         
-        # 计算提示词模板的token数（不包括章节内容）
+        # 计算提示词模板的token数（不包括分片内容）
         prompt_tokens = len(self._tokenize(prompt_template.format(text="")))
         
-        # 计算可用于章节内容的token数
+        # 计算可用于分片内容的token数
         available_tokens = self.max_input_tokens - prompt_tokens
         
-        # 对章节内容进行截断
-        truncated_text = self._smart_truncate(text, available_tokens)
+        # 对分片内容进行截断
+        #truncated_text = self._smart_truncate(text, available_tokens)
         
         # 组装完整提示词
-        prompt = prompt_template.format(text=truncated_text)
+        prompt = prompt_template.format(text=text)
 
         analysis = self._generate_text(prompt)
         
-        logger.info(f"任务: {task_name}, 章节: {title}, 生成完成, 输出长度: {len(self._tokenize(analysis))} tokens")
+        logger.info(f"任务: {task_name}, 分片: {title}, 生成完成, 输出长度: {len(self._tokenize(analysis))} tokens")
         
         return {
             "text": f"《{title}》角色分析: {analysis}",
@@ -543,7 +492,7 @@ class NovelPretrainGenerator:
 章节标题: {title}
 
 章节内容:
-{text[:1500]}...
+{text}
 
 请提供5个高质量的问答对，每个问答对包含一个问题和对应的详细答案:"""
 
@@ -728,6 +677,93 @@ class NovelPretrainGenerator:
             }
         }
 
+    def _process_chunk(self, chunk_index: int, chunk: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """处理单个分片，生成扩充数据
+        
+        Args:
+            chunk_index: 分片索引
+            chunk: 分片数据
+            
+        Returns:
+            list: 生成的数据列表
+        """
+        results = []
+        
+        title = chunk.get("chapter_title", f"无标题分片_{chunk_index}")
+        content = chunk.get("content", "")
+        
+        # 如果内容为空，跳过
+        if not content.strip():
+            logger.warning(f"跳过空分片: {title}")
+            return results
+        
+        # 记录开始处理此分片
+        logger.info(f"开始处理分片 {chunk_index+1}/{len(self.chunks)}: {title}")
+        
+        # 首先添加原始内容
+        with self.lock:
+            self.generated_count += 1
+            original_count = self.generated_count
+            
+        results.append({
+            "text": content,
+            "meta": {
+                "url": f"novel_chunk_{original_count}",
+                "source": "original_text",
+                "title": title
+            }
+        })
+        
+        # 获取上下文信息（前一个和后一个分片）
+        prev_chunk = self.chunks[chunk_index-1] if chunk_index > 0 else None
+        next_chunk = self.chunks[chunk_index+1] if chunk_index < len(self.chunks)-1 else None
+        
+        prev_text = prev_chunk.get("content", "") if prev_chunk else ""
+        next_text = next_chunk.get("content", "") if next_chunk else ""
+        
+        # 准备上下文信息
+        chunk_contexts = {
+            "basic": content,
+            "with_end": content,
+            "with_prev": self._prepare_context_with_prev_simple(content, prev_text),
+            "with_next": self._prepare_context_with_next_simple(content, next_text),
+        }
+        
+        # 对当前分片应用随机3-5个扩充任务
+        num_tasks = random.randint(3, 5)
+        selected_tasks = random.sample(self.augmentation_tasks, num_tasks)
+        
+        # 执行每个扩充任务
+        for task_func in selected_tasks:
+            task_name = task_func.__name__.replace("_generate_", "")
+            try:
+                logger.info(f"分片 '{title}': 开始执行任务 {task_name}")
+                start_time = time.time()
+                
+                # 根据任务类型选择适当的上下文
+                context_type = self._select_context_for_task(task_func.__name__)
+                context = chunk_contexts[context_type]
+                
+                # 使用选定的上下文执行任务
+                augmented_data = task_func(context, title, prev_text, next_text)
+                if augmented_data:
+                    results.append(augmented_data)
+                    with self.lock:
+                        self.generated_count += 1
+                
+                # 记录任务完成信息
+                end_time = time.time()
+                logger.info(f"分片 '{title}': 任务 {task_name} 完成，耗时: {end_time - start_time:.2f}秒")
+            except Exception as e:
+                logger.error(f"分片 '{title}': 执行任务 {task_name} 失败: {e}", exc_info=True)
+                continue
+            
+            # 短暂休息，避免模型过载（每个线程单独休息）
+            time.sleep(0.5)
+        
+        logger.info(f"分片 '{title}' 处理完成，生成了 {len(results)} 条数据")
+        return results
+
 
 def main():
     parser = argparse.ArgumentParser(description="使用OpenAI GPT模型生成小说预训练数据")
@@ -738,9 +774,11 @@ def main():
     parser.add_argument("--openai-base-url", type=str, default="http://kugpt-openapi.akulaku.com/v1", help="OpenAI API基础URL")
     parser.add_argument("--temperature", type=float, default=0.5, help="生成温度")
     parser.add_argument("--batch-size", type=int, default=1, help="批处理大小")
-    parser.add_argument("--max-length", type=int, default=4096, help="生成文本的最大上下文长度(包括输入和输出)")
+    parser.add_argument("--max-length", type=int, default=8192, help="生成文本的最大上下文长度(包括输入和输出)")
+    parser.add_argument("--max-workers", type=int, default=5, help="最大并行工作线程数")
     parser.add_argument("--log-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], 
                      default="INFO", help="日志级别")
+    parser.add_argument("--resume-from", type=str, default=None, help="从指定章节标题恢复处理")
     
     args = parser.parse_args()
     
@@ -760,6 +798,8 @@ def main():
         max_length=args.max_length,
         temperature=args.temperature,
         log_level=args.log_level,
+        max_workers=args.max_workers,
+        resume_from=args.resume_from,
     )
     
     generator.generate_data()

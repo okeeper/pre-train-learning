@@ -188,9 +188,13 @@ python model_evaluation.py \
 # 数据处理
 ```
 nohup python novel_pretrain_data_generator.py --input data/xd_chunks_tokens_4096.json \
+--openai-base-url "http://192.168.16.125:31958/v1" \
 --openai-api-key "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyIiwiYXBwTmFtZSI6InRlc3QiLCJleHAiOjI1NTA4MjI5MzN9.NexvMHMtds-MwbUfPNk1jBNOOV-nKvBxznCSpmvuqhA" \
 --output data/pretrain_output > /dev/null 2>&1 &
 
+
+
 python novel_pretrain_data_generator.py \
+--resume-from "亵渎 盛世年华卷　章十三　天灾　上(2)" \
 --openai-api-key "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyIiwiYXBwTmFtZSI6InRlc3QiLCJleHAiOjI1NTA4MjI5MzN9.NexvMHMtds-MwbUfPNk1jBNOOV-nKvBxznCSpmvuqhA"
 ```
