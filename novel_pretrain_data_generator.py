@@ -599,7 +599,7 @@ class NovelPretrainGenerator:
 章节标题: {title}
 
 章节内容:
-{text[:1500]}...
+{text}...
 
 请基于上述内容，详细预测下一章的情节发展:"""
 
@@ -731,9 +731,9 @@ class NovelPretrainGenerator:
 
 def main():
     parser = argparse.ArgumentParser(description="使用OpenAI GPT模型生成小说预训练数据")
-    parser.add_argument("--input", type=str, default="data/xd_chunks_4096.json", help="输入的小说章节JSON文件")
+    parser.add_argument("--input", type=str, default="data/xd_chunks_tokens_4096.json", help="输入的小说章节JSON文件")
     parser.add_argument("--output", type=str, default="data/pretrain_output", help="输出的预训练数据目录")
-    parser.add_argument("--openai-api-key", type=str, default="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyIiwiYXBwTmFtZSI6InRlc3QiLCJleHAiOjI1NTA4MjI5MzN9.NexvMHMtds-MwbUfPNk1jBNOOV-nKvBxznCSpmvuqhA", help="OpenAI API密钥")
+    parser.add_argument("--openai-api-key", type=str, default="", help="OpenAI API密钥")
     parser.add_argument("--openai-model", type=str, default="gpt-4o", help="使用的OpenAI模型名称")
     parser.add_argument("--openai-base-url", type=str, default="http://kugpt-openapi.akulaku.com/v1", help="OpenAI API基础URL")
     parser.add_argument("--temperature", type=float, default=0.5, help="生成温度")
