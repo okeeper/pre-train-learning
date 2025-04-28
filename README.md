@@ -111,8 +111,9 @@ python test_chat.py --model_path output/qwen_novel_pretrain_knowledge \
 
 
 # 原模型
-python test_chat.py --model_path Qwen/Qwen2.5-1.5B-Instruct \
---max_new_tokens 512 --temperature 0.7
+python test_chat.py --model_path /data/hf-models/QwQ-32B \
+--max_new_tokens 512 --temperature 0.7 \
+--gpu_memory_efficient --history_length 2
 
 
 

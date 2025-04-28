@@ -6,16 +6,50 @@ import os
 from collections import deque
 import inspect
 
-def load_model_and_tokenizer(model_path, lora_path=None):
+def load_model_and_tokenizer(model_path, lora_path=None, quantization=None, gpu_memory_efficient=False, cpu_offload=False):
     """加载模型和分词器，可选加载LoRA权重"""
     print(f"正在加载模型: {model_path}")
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        trust_remote_code=True,
-        torch_dtype=torch.float16,
-        device_map="auto"
-    )
+    
+    # 设置量化和内存优化参数
+    load_kwargs = {
+        "trust_remote_code": True,
+        "device_map": "auto"
+    }
+    
+    # 量化设置
+    if quantization == "4bit":
+        load_kwargs["load_in_4bit"] = True
+        load_kwargs["quantization_config"] = {"load_in_4bit": True, "bnb_4bit_compute_dtype": torch.float16}
+        print("使用4位量化加载模型")
+    elif quantization == "8bit":
+        load_kwargs["load_in_8bit"] = True
+        print("使用8位量化加载模型")
+    else:
+        load_kwargs["torch_dtype"] = torch.float16
+        print("使用FP16精度加载模型")
+    
+    # GPU内存优化
+    if gpu_memory_efficient:
+        print("启用GPU内存优化")
+        load_kwargs["use_flash_attention_2"] = True
+    
+    # CPU卸载设置
+    if cpu_offload:
+        print("启用CPU卸载功能以节省GPU内存")
+        from accelerate import init_empty_weights
+        from accelerate import load_checkpoint_and_dispatch
+        
+        with init_empty_weights():
+            model = AutoModelForCausalLM.from_config(
+                AutoModelForCausalLM.config_class.from_pretrained(model_path)
+            )
+        model = load_checkpoint_and_dispatch(
+            model, model_path, device_map="auto", 
+            offload_folder="offload", offload_state_dict=True
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs)
     
     # 如果提供了LoRA路径，则加载LoRA权重
     if lora_path and os.path.exists(lora_path):
@@ -133,16 +167,31 @@ def main():
     parser.add_argument("--lora_path", type=str, default=None, help="LoRA权重路径（可选）")
     parser.add_argument("--max_new_tokens", type=int, default=1024, help="生成的最大新token数量（默认：1024）")
     parser.add_argument("--temperature", type=float, default=0.7, help="生成文本的温度参数（默认：0.7）")
+    # 添加优化参数
+    parser.add_argument("--quantization", type=str, choices=["4bit", "8bit", "none"], default="none", 
+                        help="使用量化技术减少模型大小和提高速度（默认：none）")
+    parser.add_argument("--gpu_memory_efficient", action="store_true", 
+                        help="使用Flash Attention 2等技术降低GPU内存使用")
+    parser.add_argument("--cpu_offload", action="store_true", 
+                        help="允许将部分模型卸载到CPU以节省GPU内存")
+    parser.add_argument("--history_length", type=int, default=3,
+                        help="保存的对话历史轮数（默认：3）")
     args = parser.parse_args()
     
-    # 加载模型和分词器
-    model, tokenizer = load_model_and_tokenizer(args.model_path, args.lora_path)
+    # 加载模型和分词器，增加优化参数
+    model, tokenizer = load_model_and_tokenizer(
+        args.model_path, 
+        args.lora_path,
+        args.quantization if args.quantization != "none" else None,
+        args.gpu_memory_efficient,
+        args.cpu_offload
+    )
     
     print("模型加载完成！开始对话（输入'quit'退出，输入'clear'清除历史记录）：")
     print(f"当前设置：max_new_tokens={args.max_new_tokens}, temperature={args.temperature}")
     
-    # 使用deque保存最近3条对话历史
-    history = deque(maxlen=3)
+    # 使用deque保存最近N条对话历史，现在使用命令行参数
+    history = deque(maxlen=args.history_length)
     
     # 开始对话循环
     while True:

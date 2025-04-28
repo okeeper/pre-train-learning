@@ -1,17 +1,23 @@
 import json
 import os
 import re
+import tiktoken  # 添加tiktoken库用于计算token
 
-def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name, chapter_is_split_by_newline=True, max_chunk_size=1024, min_chunk_size=768, overlap=256):
+def count_tokens(text, encoding_name="cl100k_base"):
+    """计算文本的token数量"""
+    encoding = tiktoken.get_encoding(encoding_name)
+    return len(encoding.encode(text))
+
+def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name, chapter_is_split_by_newline=True, max_chunk_tokens=1024, min_chunk_tokens=768, overlap_tokens=256):
     """
     将小说分割为章节和较小的文本块,使用换行将文本拆分为句子
     然后按递归分组，直至符合最大块大小和最小块大小，要求不要尽可能不要截断句子的完整性
     file_path: 小说文件路径
     novel_name: 小说名称
     chapter_is_split_by_newline: 是否使用首行空格判断章节标题，True则使用首行空格判断，False则使用正则识别章节标题
-    max_chunk_size: 最大块大小
-    min_chunk_size: 最小块大小
-    overlap: 重叠大小
+    max_chunk_tokens: 最大块token数
+    min_chunk_tokens: 最小块token数
+    overlap_tokens: 重叠token数
 
     返回的chunks格式为：
     {
@@ -168,12 +174,17 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
         if not chapter_content:
             continue
         
-        # 如果章节内容少于最小块大小，则整章作为一块
-        if len(chapter_content) < min_chunk_size:
+        # 计算章节内容的token数
+        chapter_tokens = count_tokens(chapter_content)
+        
+        # 如果章节内容少于最小块token数，则整章作为一块
+        if chapter_tokens < min_chunk_tokens:
+            full_content = novel_name + " " + chapter_title + "\n\n" + chapter_content
             chunks.append({
                 "chapter_title": novel_name + " " + chapter_title,
-                "text": novel_name + " " + chapter_title + "\n" + chapter_content,
-                "length": len(chapter_content)
+                "content": full_content,
+                "length": len(chapter_content),
+                "tokens": count_tokens(full_content)
             })
             continue
         
@@ -196,11 +207,11 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
             
             # 清理句子格式
             # 1. 去除前后空白
-            sentence = sentence.strip()
+            #sentence = sentence.strip()
             # 2. 将句子内部的多个空白字符替换为单个空格
-            sentence = re.sub(r'\s+', ' ', sentence)
+            #sentence = re.sub(r'\s+', ' ', sentence)
             # 3. 如果句子不为空，添加到结果列表
-            if sentence:
+            if sentence.strip():
                 sentences.append(sentence)
         
         # 使用迭代方法而非递归来分组句子
@@ -214,59 +225,66 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
                 # 找到合适的结束位置
                 end_idx = start_idx
                 current_chunk = []
-                current_length = 0
+                current_tokens = 0
                 
-                # 尝试扩展当前块直到达到最大大小
+                # 尝试扩展当前块直到达到最大token数
                 while end_idx < len(sentences_list):
                     sentence = sentences_list[end_idx]
-                    sentence_length = len(sentence)
+                    sentence_tokens = count_tokens(sentence)
                     
-                    # 如果添加这个句子会超过最大块大小，则停止添加
-                    if current_length + sentence_length > max_chunk_size:
+                    # 如果添加这个句子会超过最大块token数，则停止添加
+                    if current_tokens + sentence_tokens > max_chunk_tokens:
                         break
                         
                     # 否则添加这个句子
                     current_chunk.append(sentence)
-                    current_length += sentence_length
+                    current_tokens += sentence_tokens
                     end_idx += 1
                 
                 # 如果没有添加任何句子（可能是一个非常长的句子），至少包含一个句子
                 if len(current_chunk) == 0:
                     current_chunk.append(sentences_list[start_idx])
                     end_idx = start_idx + 1
+                    current_tokens = count_tokens(sentences_list[start_idx])
                 
-                # 确保当前块满足最小大小要求（如果有指定）
-                if min_chunk_size > 0 and current_length < min_chunk_size and end_idx < len(sentences_list):
-                    # 继续添加句子直到满足最小大小
-                    while end_idx < len(sentences_list) and current_length < min_chunk_size:
+                # 确保当前块满足最小token数要求（如果有指定）
+                if min_chunk_tokens > 0 and current_tokens < min_chunk_tokens and end_idx < len(sentences_list):
+                    # 继续添加句子直到满足最小token数
+                    while end_idx < len(sentences_list) and current_tokens < min_chunk_tokens:
                         sentence = sentences_list[end_idx]
-                        sentence_length = len(sentence)
+                        sentence_tokens = count_tokens(sentence)
                         
-                        # 如果添加这个句子会超过最大块大小，则停止添加
-                        if current_length + sentence_length > max_chunk_size:
+                        # 如果添加这个句子会超过最大块token数，则停止添加
+                        if current_tokens + sentence_tokens > max_chunk_tokens:
                             break
                         
                         current_chunk.append(sentence)
-                        current_length += sentence_length
+                        current_tokens += sentence_tokens
                         end_idx += 1
                 
-                # 再次验证当前块的长度
-                actual_length = sum(len(s) for s in current_chunk)
+                # 再次计算当前块的token数
+                chunk_text = ''.join(current_chunk)
+                actual_tokens = count_tokens(chunk_text)
                 
                 # 添加当前块
-                result_chunks.append({"text": current_chunk, "length": actual_length})
+                result_chunks.append({
+                    "text": current_chunk, 
+                    "length": len(chunk_text),
+                    "tokens": actual_tokens
+                })
                 
                 # 移动到下一个块的起始位置，考虑重叠
-                if overlap > 0 and end_idx < len(sentences_list):
+                if overlap_tokens > 0 and end_idx < len(sentences_list):
                     # 找到重叠部分的起始位置
                     overlap_sentences = []
-                    overlap_length = 0
+                    overlap_token_count = 0
                     i = end_idx - 1
                     
-                    # 从末尾开始累积句子，直到达到指定的重叠大小
-                    while i >= start_idx and overlap_length < overlap:
+                    # 从末尾开始累积句子，直到达到指定的重叠token数
+                    while i >= start_idx and overlap_token_count < overlap_tokens:
+                        sentence_tokens = count_tokens(sentences_list[i])
                         overlap_sentences.insert(0, sentences_list[i])
-                        overlap_length += len(sentences_list[i])
+                        overlap_token_count += sentence_tokens
                         i -= 1
                     
                     # 设置下一个块的起始位置
@@ -291,43 +309,30 @@ def split_novel_into_chapters_and_chunks(file_path, output_file_name, novel_name
             if len(sentence_groups) > 1:
                 chunk_title = f"{chapter_title}({i+1})"
             
+            full_content = novel_name + " " + chunk_title + "\n\n" + chunk_text
+            
             chunks.append({
-                "chapter_title": novel_name + " " +chunk_title,
-                "text": novel_name + " " + chunk_title + "\n" + chunk_text,
-                "length": group["length"]
+                "chapter_title": novel_name + " " + chunk_title,
+                "content": full_content,
+                "length": len(chunk_text),
+                "tokens": count_tokens(full_content)
             })
     
     print(f"将小说分割为 {len(chunks)} 个文本块")
-     # 保存chunks
+    # 保存chunks
     with open(os.path.join(output_file_name), "w", encoding="utf-8") as f:
         json.dump(chunks, f, ensure_ascii=False, indent=2)
     return chunks
 
 if __name__ == "__main__":
-    # 分割小说文本
-    # chunks = split_novel_into_chapters_and_chunks("data/novel.txt", 
-    #                                               "data/novel_chunks_1024.json",
-    #                                               "龙战士传奇", 
-    #                                               chapter_is_split_by_newline=True, 
-    #                                               max_chunk_size=1024, 
-    #                                               min_chunk_size=768, 
-    #                                               overlap=0)
-    
-    # 写一个循环，遍历32,64,128,256,512,768,1024,1280,1536,1792,2048,4096,32k  生成不同大小的chunks
-    # for chunk_size in [32,64,128,256,512,768,1024,1280,1536,1792,2048,4096,32768]:
-    #     chunks = split_novel_into_chapters_and_chunks("data/亵渎.txt", 
-    #                                               f"data/xd_chunks_{chunk_size}.json",
-    #                                               "亵渎", 
-    #                                               chapter_is_split_by_newline=False, 
-    #                                               max_chunk_size=chunk_size, 
-    #                                               min_chunk_size=0, 
-    #                                               overlap=0)
-    chunks = split_novel_into_chapters_and_chunks("data/亵渎.txt", 
-                                                  f"data/xd_chunks_10240.json",
+    # 使用不同的token大小生成chunks
+    for chunk_tokens in [32, 64, 128, 256, 512, 768, 1024, 1280, 1536, 1792, 2048, 4096, 10240, 32768]:
+        chunks = split_novel_into_chapters_and_chunks("data/亵渎.txt", 
+                                                  f"data/xd_chunks_tokens_{chunk_tokens}.json",
                                                   "亵渎", 
                                                   chapter_is_split_by_newline=False, 
-                                                  max_chunk_size=10240, 
-                                                  min_chunk_size=0, 
-                                                  overlap=0)
+                                                  max_chunk_tokens=chunk_tokens, 
+                                                  min_chunk_tokens=0, 
+                                                  overlap_tokens=0)
 
    
