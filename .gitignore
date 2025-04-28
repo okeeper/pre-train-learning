@@ -2,3 +2,4 @@ attention_env/
 output/
 models/
 model_cache/
+logs/

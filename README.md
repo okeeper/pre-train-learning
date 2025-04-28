@@ -183,3 +183,14 @@ python model_evaluation.py \
     --fp16 \
     --use_wandb
 ```
+
+
+# 数据处理
+```
+nohup python novel_pretrain_data_generator.py --input data/xd_chunks_tokens_4096.json \
+--openai-api-key "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyIiwiYXBwTmFtZSI6InRlc3QiLCJleHAiOjI1NTA4MjI5MzN9.NexvMHMtds-MwbUfPNk1jBNOOV-nKvBxznCSpmvuqhA" \
+--output data/pretrain_output > /dev/null 2>&1 &
+
+python novel_pretrain_data_generator.py \
+--openai-api-key "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyIiwiYXBwTmFtZSI6InRlc3QiLCJleHAiOjI1NTA4MjI5MzN9.NexvMHMtds-MwbUfPNk1jBNOOV-nKvBxznCSpmvuqhA"
+```
