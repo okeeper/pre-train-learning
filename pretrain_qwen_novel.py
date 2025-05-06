@@ -41,7 +41,7 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[
         logging.StreamHandler(stream=sys.stdout),  # 直接输出到标准输出
-        logging.FileHandler(os.path.join(os.path.dirname(__file__), "training.log"))  # 同时保存到文件
+        logging.FileHandler(os.path.join(os.path.dirname(__file__), "logs/training.log"))  # 同时保存到文件
     ]
 )
 logger = logging.getLogger(__name__)
@@ -386,84 +386,84 @@ def print_training_config(args, model_config, train_dataset, is_distributed):
     effective_batch_size = args.per_device_train_batch_size * gpu_count * args.gradient_accumulation_steps
 
     # 打印基本信息
-    print("\n\n")
-    print(separator)
-    print("Qwen 预训练配置")
-    print(separator)
+    logger.info("\n\n")
+    logger.info(separator)
+    logger.info("Qwen 预训练配置")
+    logger.info(separator)
     
     # 基本信息部分
-    print(f"开始时间:\t{now}")
-    print(f"模型名称:\t{args.model_name_or_path}")
+    logger.info(f"开始时间:\t{now}")
+    logger.info(f"模型名称:\t{args.model_name_or_path}")
     if params_count:
-        print(f"模型规模:\t{params_count}")
+        logger.info(f"模型规模:\t{params_count}")
     
     # 模型架构部分
-    print("\n模型架构:")
-    print(f"\t隐藏层数:\t{model_config.num_hidden_layers}")
-    print(f"\t隐藏维度:\t{model_config.hidden_size}")
+    logger.info("\n模型架构:")
+    logger.info(f"\t隐藏层数:\t{model_config.num_hidden_layers}")
+    logger.info(f"\t隐藏维度:\t{model_config.hidden_size}")
     if hasattr(model_config, "num_attention_heads"):
-        print(f"\t注意力头数:\t{model_config.num_attention_heads}")
+        logger.info(f"\t注意力头数:\t{model_config.num_attention_heads}")
     if hasattr(model_config, "vocab_size"):
-        print(f"\t词表大小:\t{model_config.vocab_size}")
+        logger.info(f"\t词表大小:\t{model_config.vocab_size}")
     
     # 训练数据部分
-    print("\n训练数据:")
-    print(f"\t数据目录:\t{args.data_dir}")
-    print(f"\t文件模式:\t{args.file_pattern}")
-    print(f"\t数据样本数:\t{len(train_dataset):,} 个样本")
-    print(f"\t最大序列长度:\t{args.max_seq_length}")
+    logger.info("\n训练数据:")
+    logger.info(f"\t数据目录:\t{args.data_dir}")
+    logger.info(f"\t文件模式:\t{args.file_pattern}")
+    logger.info(f"\t数据样本数:\t{len(train_dataset):,} 个样本")
+    logger.info(f"\t最大序列长度:\t{args.max_seq_length}")
     
     # 训练设置部分
-    print("\n训练设置:")
-    print(f"\tGPU数量:\t{gpu_count} 个")
-    print(f"\t每设备批次大小:\t{args.per_device_train_batch_size}")
-    print(f"\t梯度累积步数:\t{args.gradient_accumulation_steps}")
-    print(f"\t有效总批次大小:\t{effective_batch_size}")
+    logger.info("\n训练设置:")
+    logger.info(f"\tGPU数量:\t{gpu_count} 个")
+    logger.info(f"\t每设备批次大小:\t{args.per_device_train_batch_size}")
+    logger.info(f"\t梯度累积步数:\t{args.gradient_accumulation_steps}")
+    logger.info(f"\t有效总批次大小:\t{effective_batch_size}")
     
     if args.max_steps > 0:
-        print(f"\t训练步数:\t{args.max_steps:,}")
+        logger.info(f"\t训练步数:\t{args.max_steps:,}")
         total_samples = args.max_steps * effective_batch_size
         epochs_equiv = args.max_steps * effective_batch_size / len(train_dataset)
-        print(f"\t预计训练样本数:\t{total_samples:,} (约 {epochs_equiv:.2f} 轮)")
+        logger.info(f"\t预计训练样本数:\t{total_samples:,} (约 {epochs_equiv:.2f} 轮)")
     else:
-        print(f"\t训练轮次:\t{args.num_train_epochs:.1f} 轮")
+        logger.info(f"\t训练轮次:\t{args.num_train_epochs:.1f} 轮")
         estimated_steps = int(len(train_dataset) * args.num_train_epochs / effective_batch_size)
-        print(f"\t预计总步数:\t{estimated_steps:,}")
+        logger.info(f"\t预计总步数:\t{estimated_steps:,}")
     
     # 优化器设置部分
-    print("\n优化器设置:")
-    print(f"\t学习率:\t{args.learning_rate:.1e}")
-    print(f"\t权重衰减:\t{args.weight_decay}")
+    logger.info("\n优化器设置:")
+    logger.info(f"\t学习率:\t{args.learning_rate:.1e}")
+    logger.info(f"\t权重衰减:\t{args.weight_decay}")
     
     # 加速技术部分
-    print("\n加速技术:")
-    print(f"\tFP16混合精度:\t{'启用' if args.fp16 else '禁用'}")
-    print(f"\t梯度检查点:\t{'启用' if args.gradient_checkpointing else '禁用'}")
+    logger.info("\n加速技术:")
+    logger.info(f"\tFP16混合精度:\t{'启用' if args.fp16 else '禁用'}")
+    logger.info(f"\t梯度检查点:\t{'启用' if args.gradient_checkpointing else '禁用'}")
     
     # 保存与监控部分
-    print("\n保存与监控:")
-    print(f"\t输出目录:\t{args.output_dir}")
-    print(f"\t日志步数:\t{args.logging_steps}")
-    print(f"\t保存步数:\t{args.save_steps}")
-    print(f"\tWeights & Biases:\t{'启用' if args.use_wandb else '禁用'}")
+    logger.info("\n保存与监控:")
+    logger.info(f"\t输出目录:\t{args.output_dir}")
+    logger.info(f"\t日志步数:\t{args.logging_steps}")
+    logger.info(f"\t保存步数:\t{args.save_steps}")
+    logger.info(f"\tWeights & Biases:\t{'启用' if args.use_wandb else '禁用'}")
     if args.use_wandb and wandb.run:
         if args.wandb_project:
-            print(f"\tWandB项目:\t{args.wandb_project}")
+            logger.info(f"\tWandB项目:\t{args.wandb_project}")
         else:
-            print(f"\tWandB项目:\t{'未指定'}")
-        print(f"\tWandB运行:\t{wandb.run.name}")
+            logger.info(f"\tWandB项目:\t{'未指定'}")
+        logger.info(f"\tWandB运行:\t{wandb.run.name}")
     
     # 其他信息部分
-    print("\n其他信息:")
-    print(f"\t随机种子:\t{args.seed}")
+    logger.info("\n其他信息:")
+    logger.info(f"\t随机种子:\t{args.seed}")
     
     # 添加LoRA配置信息
     if args.use_lora:
-        print("\nLoRA配置:")
-        print(f"\tLoRA秩:\t{args.lora_rank}")
-        print(f"\tLoRA Alpha:\t{args.lora_alpha}")
-        print(f"\tLoRA Dropout:\t{args.lora_dropout}")
-        print(f"\tLoRA目标模块:\t{args.lora_target_modules}")
+        logger.info("\nLoRA配置:")
+        logger.info(f"\tLoRA秩:\t{args.lora_rank}")
+        logger.info(f"\tLoRA Alpha:\t{args.lora_alpha}")
+        logger.info(f"\tLoRA Dropout:\t{args.lora_dropout}")
+        logger.info(f"\tLoRA目标模块:\t{args.lora_target_modules}")
     
     # 预计的训练时间
     tokens_per_step = effective_batch_size * args.max_seq_length
@@ -490,13 +490,13 @@ def print_training_config(args, model_config, train_dataset, is_distributed):
         time_str += f"{days}天 "
     time_str += f"{hours}小时 {minutes}分钟"
     
-    print(f"\t预计训练时长:\t{time_str}")
+    logger.info(f"\t预计训练时长:\t{time_str}")
     
     # 结束部分
-    print(separator)
-    print("训练已开始...")
-    print(separator)
-    print("\n")
+    logger.info(separator)
+    logger.info("训练已开始...")
+    logger.info(separator)
+    logger.info("\n")
 
 def main():
     # 忽略 SIGHUP 信号
