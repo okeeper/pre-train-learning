@@ -208,6 +208,7 @@ class NovelChunksDataset(Dataset):
             try:
                 # 检查文件扩展名，处理不同格式
                 if json_file.endswith('.jsonl'):
+                    logger.info(f"加载JSONL文件: {json_file}")
                     # 处理JSONL格式
                     with open(json_file, 'r', encoding='utf-8') as f:
                         for line in f:
@@ -223,6 +224,7 @@ class NovelChunksDataset(Dataset):
                             except json.JSONDecodeError as je:
                                 logger.warning(f"解析JSONL行时出错: {str(je)}")
                 else:
+                    logger.info(f"加载JSON文件: {json_file}")
                     # 处理JSON格式
                     with open(json_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
