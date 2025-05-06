@@ -443,6 +443,7 @@ def print_training_config(args, model_config, train_dataset, is_distributed):
 def main():
     # 忽略 SIGHUP 信号
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
+
     
     args = parse_args()
     set_seed(args.seed)
@@ -460,6 +461,10 @@ def main():
             
         logger.info(f"使用分布式训练，rank={args.local_rank}，设备={torch.cuda.current_device()}")
     
+    # 训练前主动清理内存
+    model = model.cpu()
+    torch.cuda.empty_cache()
+
     # 定义主进程变量
     is_main_process = args.local_rank == -1 or args.local_rank == 0
     
