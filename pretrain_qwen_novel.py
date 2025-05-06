@@ -26,6 +26,8 @@ import time
 import sys
 from torch.distributed import gather_object
 import signal
+# 导入PEFT/LoRA相关库
+from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_training
 
 # 强制刷新所有标准输出
 os.environ["PYTHONUNBUFFERED"] = "1"
@@ -174,14 +176,6 @@ def parse_args():
         help="优化器类型 (default: adamw_torch)",
     )
 
-    # parser.add_argument(
-    #     "--local-rank",
-    #     type=int,
-    #     dest="local_rank",  # 指向同一个目标变量
-    #     default=-1,
-    #     help=argparse.SUPPRESS,  # 在帮助信息中隐藏这个重复参数
-    # )
-    # 这是关键变化：torchrun使用RANK和WORLD_SIZE环境变量
     parser.add_argument(
         "--local_rank",
         type=int,
@@ -195,6 +189,44 @@ def parse_args():
         type=str,
         default=None,
         help="DeepSpeed配置文件路径",
+    )
+    
+    # 添加LoRA相关参数
+    parser.add_argument(
+        "--use_lora",
+        action="store_true",
+        help="是否使用LoRA进行参数高效微调",
+    )
+    parser.add_argument(
+        "--lora_rank",
+        type=int,
+        default=8,
+        help="LoRA秩，较小的值占用更少的内存，较大的值提供更多的容量",
+    )
+    parser.add_argument(
+        "--lora_alpha",
+        type=int,
+        default=16,
+        help="LoRA缩放系数",
+    )
+    parser.add_argument(
+        "--lora_dropout",
+        type=float,
+        default=0.05,
+        help="LoRA dropout概率",
+    )
+    parser.add_argument(
+        "--lora_target_modules", 
+        type=str,
+        default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
+        help="需要添加LoRA的目标模块，以逗号分隔",
+    )
+    
+    # 添加量化参数
+    parser.add_argument(
+        "--quantization",
+        action="store_true",
+        help="是否使用4bit量化以减少内存使用",
     )
 
     args = parser.parse_args()
@@ -425,6 +457,14 @@ def print_training_config(args, model_config, train_dataset, is_distributed):
     print("\n其他信息:")
     print(f"\t随机种子:\t{args.seed}")
     
+    # 添加LoRA配置信息
+    if args.use_lora:
+        print("\nLoRA配置:")
+        print(f"\tLoRA秩:\t{args.lora_rank}")
+        print(f"\tLoRA Alpha:\t{args.lora_alpha}")
+        print(f"\tLoRA Dropout:\t{args.lora_dropout}")
+        print(f"\tLoRA目标模块:\t{args.lora_target_modules}")
+    
     # 预计的训练时间
     tokens_per_step = effective_batch_size * args.max_seq_length
     if args.max_steps > 0:
@@ -501,7 +541,6 @@ def main():
         # 启用进度条报告
         wandb.config.update({"enable_progress_tracking": True})
     
-    
     # 加载模型配置和分词器
     logger.info(f"加载模型配置: {args.model_name_or_path}")
     model_config = AutoConfig.from_pretrained(args.model_name_or_path)
@@ -512,15 +551,65 @@ def main():
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
     
-    # 加载模型
+    # 加载模型 - 根据是否使用量化调整参数
     logger.info(f"加载预训练模型: {args.model_name_or_path}")
+    
+    # 设置量化配置
+    quantization_config = None
+    if args.quantization:
+        try:
+            from transformers import BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+            )
+            logger.info("使用4比特量化加载模型")
+        except ImportError:
+            logger.warning("未安装bitsandbytes库，无法使用量化功能")
+            logger.warning("请使用pip install bitsandbytes>=0.39.0安装")
+    
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path, 
-        config=model_config
+        config=model_config,
+        quantization_config=quantization_config,
+        device_map="auto" if torch.cuda.is_available() else None,
+        torch_dtype=torch.float16 if args.fp16 and torch.cuda.is_available() else None,
     )
     
+    # 启用梯度检查点以节省内存
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
+    
+    # 应用LoRA (如果启用)
+    if args.use_lora:
+        logger.info("使用LoRA进行参数高效预训练")
+        
+        # 如果使用量化，需要准备模型
+        if args.quantization:
+            model = prepare_model_for_kbit_training(model)
+            
+        # 解析目标模块
+        target_modules = args.lora_target_modules.split(",")
+        logger.info(f"LoRA目标模块: {target_modules}")
+        
+        # 设置LoRA配置
+        lora_config = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            target_modules=target_modules,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        
+        # 应用LoRA
+        model = get_peft_model(model, lora_config)
+        
+        # 打印可训练参数信息
+        if is_main_process:
+            model.print_trainable_parameters()
     
     # 加载数据集(所有进程需要自己的副本)
     logger.info(f"加载训练数据: {args.data_dir}")
@@ -530,8 +619,6 @@ def main():
         max_seq_length=args.max_seq_length,
         file_pattern=args.file_pattern
     )
-    
-   
     
     # 仅在主进程打印训练配置
     if is_main_process:
@@ -578,7 +665,7 @@ def main():
         mlm=False,
     )
     
-    # 初始化Trainer - 移除了自定义回调
+    # 初始化Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -593,13 +680,6 @@ def main():
     # 开始训练
     logger.info("开始训练...")
     
-    # 强制同步所有进程时指定设备
-    # if is_distributed:
-    #     # 获取当前设备ID
-    #     device_id = torch.cuda.current_device()
-    #     # 明确指定设备进行barrier操作
-    #     torch.distributed.barrier(device_ids=[device_id])
-    
     train_result = trainer.train()
     
     # 输出训练结果
@@ -611,7 +691,15 @@ def main():
     # 保存模型(仅主进程)
     if is_main_process:
         logger.info("保存最终模型")
-        trainer.save_model(args.output_dir)
+        
+        # 对于LoRA模型，只保存LoRA权重
+        if args.use_lora:
+            model.save_pretrained(args.output_dir)
+            logger.info(f"LoRA权重已保存到: {args.output_dir}")
+        else:
+            # 保存完整模型
+            trainer.save_model(args.output_dir)
+        
         tokenizer.save_pretrained(args.output_dir)
         
         # 保存训练参数
