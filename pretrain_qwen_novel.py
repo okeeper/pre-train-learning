@@ -165,6 +165,15 @@ def parse_args():
         choices=["all", "gradients", "parameters", "False"],
         help="wandb的watch级别 (default: gradients)",
     )
+
+    parser.add_argument(
+        "--optim",
+        type=str,
+        default="adamw_torch",
+        choices=["adamw_8bit", "adamw_torch", "adamw_torch_fp16", "adamw_torch_fp16_distributed", "adamw_torch_fp16_distributed_zero2"],
+        help="优化器类型 (default: adamw_8bit)",
+    )
+
     # parser.add_argument(
     #     "--local-rank",
     #     type=int,
@@ -544,6 +553,9 @@ def main():
         # 分布式训练参数
         local_rank=args.local_rank,
         ddp_find_unused_parameters=False,
+
+        # 添加8位优化器支持
+        optim=args.optim,
     )
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
