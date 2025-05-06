@@ -153,6 +153,8 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --output_dir output/qwen3_novel_pretrain_mix \
   --wandb_name qwen3_novel_pretrain_mix \
   --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 8 \
   --max_seq_length 4096 \
   --num_train_epochs 1.0 \
   --learning_rate 1e-5 \
