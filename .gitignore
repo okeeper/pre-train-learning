@@ -3,3 +3,6 @@ output/
 models/
 model_cache/
 logs/
+evaluation_results/
+training.log
+wandb/
