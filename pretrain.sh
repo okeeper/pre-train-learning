@@ -159,4 +159,6 @@ python pretrain_qwen_novel.py \
   --learning_rate 1e-5 \
   --fp16 \
   --gradient_checkpointing \
-  --use_wandb
+  --use_wandb \
+  --optim adamw_8bit \
+  --deepspeed ds_config.json

@@ -171,7 +171,7 @@ def parse_args():
         type=str,
         default="adamw_torch",
         choices=["adamw_8bit", "adamw_torch", "adamw_torch_fp16", "adamw_torch_fp16_distributed", "adamw_torch_fp16_distributed_zero2"],
-        help="优化器类型 (default: adamw_8bit)",
+        help="优化器类型 (default: adamw_torch)",
     )
 
     # parser.add_argument(
@@ -188,6 +188,15 @@ def parse_args():
         default=int(os.environ.get("LOCAL_RANK", -1)),  # 支持两种启动方式
         help="分布式训练的本地排名",
     )
+
+    # 添加DeepSpeed参数
+    parser.add_argument(
+        "--deepspeed",
+        type=str,
+        default=None,
+        help="DeepSpeed配置文件路径",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -556,6 +565,9 @@ def main():
 
         # 添加8位优化器支持
         optim=args.optim,
+
+        # 添加DeepSpeed支持
+        deepspeed=args.deepspeed,
     )
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
