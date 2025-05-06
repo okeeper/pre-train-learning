@@ -74,13 +74,13 @@ conda remove --name novel_qa --all
 
 # 预训练
 
-```
+```shell
 conda activate llama-factory
 conda activate zye
 ```
 
 
-```
+```shell
 python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --output_dir output/qwen1.5b_xd_pretrain \
   --file_pattern xd_chunks_32.json,xd_chunks_128.json,xd_chunks_1024.json,xd_chunks_4096.json \
@@ -98,7 +98,7 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
 ```
 
 ## chat
-```
+```shell
 
 python test_chat.py --model_path output/output/qwen_novel_pretrain_long \
 --max_new_tokens 512 --temperature 0.7
@@ -111,7 +111,7 @@ python test_chat.py --model_path output/qwen_novel_pretrain_knowledge \
 
 
 # 原模型
-python test_chat.py --model_path /data/hf-models/QwQ-32B \
+python test_chat.py --model_path /data/hf-models/Qwen3-8B \
 --quantization 4bit \
 --max_new_tokens 512 --temperature 0.7 \
 --gpu_memory_efficient --history_length 2
@@ -125,7 +125,7 @@ python test_chat.py --model_path /path/to/your/model --lora_path /path/to/your/l
 
 
 # 评估
-```
+```shell
 # c3,squad_v2,
 python model_evaluation.py \
     --model_path output/qwen_novel_pretrain_knowledge2 \
@@ -186,7 +186,7 @@ python model_evaluation.py \
 
 
 # 数据处理
-```
+```shell
 nohup python novel_pretrain_data_generator.py --input data/xd_chunks_tokens_4096.json \
 --openai-base-url "http://192.168.16.125:31958/v1" \
 --openai-api-key "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyIiwiYXBwTmFtZSI6InRlc3QiLCJleHAiOjI1NTA4MjI5MzN9.NexvMHMtds-MwbUfPNk1jBNOOV-nKvBxznCSpmvuqhA" \

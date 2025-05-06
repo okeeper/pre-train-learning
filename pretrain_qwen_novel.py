@@ -206,22 +206,40 @@ class NovelChunksDataset(Dataset):
         # 加载所有文件的数据
         for json_file in json_files:
             try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        for item in data:
-                            if isinstance(item, dict) and "content" in item:
-                                self.examples.append(item["content"])
-                            elif isinstance(item, dict) and "text" in item:
-                                self.examples.append(item["text"])
-                            elif isinstance(item, str):
-                                self.examples.append(item)
-                    elif isinstance(data, dict) and "content" in data:
-                        self.examples.append(data["content"])
-                    elif isinstance(data, dict) and "text" in data:
-                        self.examples.append(data["text"])
-                    else:
-                        logger.warning(f"文件{json_file}格式不符合预期: {type(data)}")
+                # 检查文件扩展名，处理不同格式
+                if json_file.endswith('.jsonl'):
+                    # 处理JSONL格式
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            try:
+                                item = json.loads(line.strip())
+                                if isinstance(item, dict):
+                                    if "content" in item:
+                                        self.examples.append(item["content"])
+                                    elif "text" in item:
+                                        self.examples.append(item["text"])
+                                elif isinstance(item, str):
+                                    self.examples.append(item)
+                            except json.JSONDecodeError as je:
+                                logger.warning(f"解析JSONL行时出错: {str(je)}")
+                else:
+                    # 处理JSON格式
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, dict) and "content" in item:
+                                    self.examples.append(item["content"])
+                                elif isinstance(item, dict) and "text" in item:
+                                    self.examples.append(item["text"])
+                                elif isinstance(item, str):
+                                    self.examples.append(item)
+                        elif isinstance(data, dict) and "content" in data:
+                            self.examples.append(data["content"])
+                        elif isinstance(data, dict) and "text" in data:
+                            self.examples.append(data["text"])
+                        else:
+                            logger.warning(f"文件{json_file}格式不符合预期: {type(data)}")
             except Exception as e:
                 logger.error(f"处理文件{json_file}时出错: {str(e)}")
         

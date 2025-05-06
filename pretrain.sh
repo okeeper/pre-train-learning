@@ -122,7 +122,7 @@ torchrun --nproc_per_node=2 --rdzv_backend=c10d pretrain_qwen_novel.py \
 
 
 # 任务图谱
-python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
+torchrun --nproc_per_node=2 --rdzv_backend=c10d pretrain_qwen_novel.py \
   --model_name_or_path output/qwen_novel_pretrain_stage2 \
   --output_dir output/qwen_novel_pretrain_knowledge \
   --wandb_name qwen_novel_pretrain_knowledge \
@@ -130,6 +130,19 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --per_device_train_batch_size 2 \
   --gradient_accumulation_steps 4 \
   --max_seq_length 512 \
+  --num_train_epochs 1.0 \
+  --learning_rate 1e-5 \
+  --use_wandb
+
+  # 千问3-8b
+torchrun --nproc_per_node=2 --rdzv_backend=c10d pretrain_qwen_novel.py \
+  --model_name_or_path   /data/hf-models/Qwen3-8B \
+  --output_dir output/qwen3_novel_pretrain_mix \
+  --wandb_name qwen3_novel_pretrain_mix \
+  --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 2 \
+  --max_seq_length 4096 \
   --num_train_epochs 1.0 \
   --learning_rate 1e-5 \
   --use_wandb
