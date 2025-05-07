@@ -214,7 +214,7 @@ python pretrain_qwen_novel.py \
   --output_dir output/qwen3_novel_lora_pretrain \
   --wandb_name qwen3_novel_lora_pretrain \
   --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
-  --per_device_train_batch_size 2 \
+  --per_device_train_batch_size 4 \
   --gradient_accumulation_steps 4 \
   --max_seq_length 4096 \
   --num_train_epochs 1.0 \

@@ -204,6 +204,7 @@ def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=102
         return "抱歉，生成回复时发生错误。"
 
 def main():
+    print("开始运行测试聊天程序...")
     # 设置命令行参数
     parser = argparse.ArgumentParser(description="运行大语言模型聊天")
     parser.add_argument("--model_path", type=str, required=True, default="Qwen/Qwen2.5-1.5B-Instruct", help="模型路径")

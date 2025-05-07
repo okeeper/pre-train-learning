@@ -115,12 +115,15 @@ python test_chat.py --model_path /data/hf-models/Qwen3-8B \
 --quantization 4bit \
 --max_new_tokens 512 --temperature 0.7 \
 --gpu_memory_efficient --history_length 2
-
-
+--cpu_offload
 
 
 # 使用LoRA
-python test_chat.py --model_path /path/to/your/model --lora_path /path/to/your/lora
+python test_chat.py --model_path /data/hf-models/Qwen3-8B \
+--lora_path output/qwen3_novel_lora_pretrain \
+--max_new_tokens 512 --temperature 0.7
+
+
 ```
 
 
