@@ -16,6 +16,7 @@ from transformers import (
     StoppingCriteriaList, 
     StoppingCriteria
 )
+from peft import PeftModel
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from rouge import Rouge
 import pandas as pd
@@ -181,6 +182,19 @@ def parse_args():
     # 添加选择题相关参数
     parser.add_argument("--single_choice_dataset", type=str, default=None, 
                         help="用于单选题评估的数据集，支持HuggingFace数据集名称或本地文件路径，多个用逗号分隔")
+    
+    # 添加LoRA相关参数
+    parser.add_argument(
+        "--use_lora",
+        action="store_true",
+        help="是否使用LoRA模型"
+    )
+    parser.add_argument(
+        "--lora_model_path",
+        type=str,
+        default=None,
+        help="LoRA模型路径"
+    )
     
     args = parser.parse_args()
     return args
@@ -1672,6 +1686,7 @@ def load_model_and_tokenizer(args):
     logger.info(f"使用设备: {device}")
     
     try:
+        # 加载分词器
         tokenizer = AutoTokenizer.from_pretrained(args.model_path)
         model_kwargs = {}
         use_accelerate = False
@@ -1679,22 +1694,47 @@ def load_model_and_tokenizer(args):
         if args.fp16:
             model_kwargs["torch_dtype"] = torch.float16
         
-        # 根据设备类型决定如何加载模型
-        if device.type == "cuda":
-            model = AutoModelForCausalLM.from_pretrained(
+        # 根据是否使用LoRA决定加载方式
+        if args.use_lora:
+            if not args.lora_model_path:
+                raise ValueError("使用LoRA时必须指定lora_model_path参数")
+                
+            logger.info(f"加载基础模型: {args.model_path}")
+            base_model = AutoModelForCausalLM.from_pretrained(
                 args.model_path,
-                device_map="auto",
+                device_map="auto" if device.type == "cuda" else None,
                 **model_kwargs
             )
-            use_accelerate = True
-            logger.info("使用accelerate自动设备映射加载模型")
+            
+            logger.info(f"加载LoRA权重: {args.lora_model_path}")
+            model = PeftModel.from_pretrained(
+                base_model,
+                args.lora_model_path,
+                device_map="auto" if device.type == "cuda" else None
+            )
+            
+            if device.type != "cuda":
+                model = model.to(device)
+                
+            use_accelerate = device.type == "cuda"
+            logger.info("成功加载LoRA模型")
         else:
-            model = AutoModelForCausalLM.from_pretrained(
-                args.model_path,
-                **model_kwargs
-            )
-            model = model.to(device)
-            logger.info(f"模型已加载到 {device}")
+            # 原始模型加载逻辑
+            if device.type == "cuda":
+                model = AutoModelForCausalLM.from_pretrained(
+                    args.model_path,
+                    device_map="auto",
+                    **model_kwargs
+                )
+                use_accelerate = True
+                logger.info("使用accelerate自动设备映射加载模型")
+            else:
+                model = AutoModelForCausalLM.from_pretrained(
+                    args.model_path,
+                    **model_kwargs
+                )
+                model = model.to(device)
+                logger.info(f"模型已加载到 {device}")
         
         return device, model, tokenizer, use_accelerate
     except Exception as e:

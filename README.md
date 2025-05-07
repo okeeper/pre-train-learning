@@ -113,7 +113,7 @@ python test_chat.py --model_path output/qwen_novel_pretrain_knowledge \
 # 原模型
 python test_chat.py --model_path /data/hf-models/Qwen3-8B \
 --quantization 4bit \
---max_new_tokens 512 --temperature 0.7 \
+--max_new_tokens 1024 --temperature 0.7 \
 --gpu_memory_efficient --history_length 2
 --cpu_offload
 
@@ -121,7 +121,7 @@ python test_chat.py --model_path /data/hf-models/Qwen3-8B \
 # 使用LoRA
 python test_chat.py --model_path /data/hf-models/Qwen3-8B \
 --lora_path output/qwen3_novel_lora_pretrain \
---max_new_tokens 512 --temperature 0.7
+--max_new_tokens 1024 --temperature 0.7
 
 
 ```
@@ -185,6 +185,22 @@ python model_evaluation.py \
     --batch_size 16 \
     --fp16 \
     --use_wandb
+
+
+# 评估Qwen3 lora
+python model_evaluation.py \
+    --model_path /data/hf-models/Qwen3-8B \
+    --use_lora \
+    --lora_model_path "output/qwen3_novel_lora_pretrain" \
+    --perplexity_dataset data/xd_eval_preplexity.txt \
+    --novel_name "亵渎" \
+    --qa_dataset ./data/xd_eval_qa2.csv \
+    --single_choice_dataset ./data/xd_eval_choice.csv \
+    --output_dir ./output/evaluation_results \
+    --tasks perplexity,qa,single_choice \
+    --batch_size 16 \
+    --fp16 \
+    --use_wandb
 ```
 
 
@@ -200,4 +216,17 @@ nohup python novel_pretrain_data_generator.py --input data/xd_chunks_tokens_4096
 python novel_pretrain_data_generator.py \
 --resume-from "亵渎 盛世年华卷　章十三　天灾　上(2)" \
 --openai-api-key "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyIiwiYXBwTmFtZSI6InRlc3QiLCJleHAiOjI1NTA4MjI5MzN9.NexvMHMtds-MwbUfPNk1jBNOOV-nKvBxznCSpmvuqhA"
+```
+
+
+
+```
+# 使用清华源
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 或使用阿里云源
+pip config set global.index-url https://mirrors.aliyun.com/pypi/simple
+
+
+pip install -i https://mirrors.aliyun.com/pypi/simple bert_score
 ```
