@@ -299,7 +299,7 @@ def main():
         prompt = f"用户：{user_input}\n助手："
         
         try:
-            response = generate_qwen_response(
+            assistant_response, thinking_content = generate_qwen_response(
                 model, 
                 tokenizer, 
                 prompt, 
@@ -308,8 +308,7 @@ def main():
                 temperature=args.temperature,
                 enable_thinking=args.enable_thinking
             )
-            # 提取助手的回复部分
-            assistant_response = response.split("助手：")[-1].strip()
+            print(f"\n思考: {thinking_content}")
             print(f"\n助手: {assistant_response}")
             
             # 更新历史记录

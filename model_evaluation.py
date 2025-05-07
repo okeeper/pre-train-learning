@@ -675,7 +675,7 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
         try:
             # 使用公共生成方法
             system_prompt = "你是一个专业的文本生成助手，请根据提供的上下文生成符合要求的文本。"
-            generated_text = generate_with_qwen_format(
+            generated_text, thinking_content = generate_with_qwen_format(
                 model=model,
                 tokenizer=tokenizer,
                 prompt=prompt,
@@ -787,7 +787,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
         system_prompt = f"你是一个小说《{args.novel_name}》阅读助手。请根据小说内容直接回答问题，答案应简洁准确，不要添加与问题无关的解释。"
         
         # 生成答案
-        generated_answer = generate_with_qwen_format(
+        generated_answer, thinking_content = generate_with_qwen_format(
             model=model,
             tokenizer=tokenizer,
             prompt=question,
@@ -1000,7 +1000,7 @@ def evaluate_classification(model, tokenizer, classification_dataset, device, ar
             system_prompt = "你是一个专业的文本分类助手，请根据提供的选项做出准确分类。"
             
             # 使用公共生成方法
-            generated_label = generate_with_qwen_format(
+            generated_label, thinking_content = generate_with_qwen_format(
                 model=model,
                 tokenizer=tokenizer,
                 prompt=prompt,
