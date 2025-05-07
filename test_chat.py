@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from modelscope import AutoModelForCausalLM, AutoTokenizer
 import torch
 import argparse
 from peft import PeftModel
@@ -100,6 +100,51 @@ def load_model_and_tokenizer(model_path, lora_path=None, quantization=None, gpu_
         model = PeftModel.from_pretrained(model, lora_path)
     
     return model, tokenizer
+
+def generate_qwen_response(model, tokenizer, prompt, history=None, max_new_tokens=1024, temperature=0.7, system_prompt=None, enable_thinking=False):
+    """生成回复，使用Qwen格式的对话模板"""
+    # prepare the model input
+    messages = []
+    if system_prompt:
+        messages.insert(0, {"role": "system", "content": system_prompt})
+
+    if history:
+        for h_user, h_assistant in history:
+            messages.append({"role": "user", "content": h_user})
+            messages.append({"role": "assistant", "content": h_assistant})
+
+    messages.append({"role": "user", "content": prompt})
+
+    # 使用Qwen格式的对话模板
+    text = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=enable_thinking # Switch between thinking and non-thinking modes. Default is True.
+    )
+    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+
+    # conduct text completion
+    generated_ids = model.generate(
+        **model_inputs,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature
+    )
+    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
+
+    # parsing thinking content
+    try:
+        # rindex finding 151668 (</think>)
+        index = len(output_ids) - output_ids[::-1].index(151668)
+    except ValueError:
+        index = 0
+
+    thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
+    content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+
+    print("thinking content:", thinking_content)
+    print("content:", content)
+    return content, thinking_content
 
 def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=1024, temperature=0.7, system_prompt=None):
     """生成回复，使用Qwen格式的对话模板
@@ -204,7 +249,6 @@ def generate_response(model, tokenizer, prompt, history=None, max_new_tokens=102
         return "抱歉，生成回复时发生错误。"
 
 def main():
-    print("开始运行测试聊天程序...")
     # 设置命令行参数
     parser = argparse.ArgumentParser(description="运行大语言模型聊天")
     parser.add_argument("--model_path", type=str, required=True, default="Qwen/Qwen2.5-1.5B-Instruct", help="模型路径")
@@ -220,8 +264,10 @@ def main():
                         help="允许将部分模型卸载到CPU以节省GPU内存")
     parser.add_argument("--history_length", type=int, default=3,
                         help="保存的对话历史轮数（默认：3）")
+    parser.add_argument("--enable_thinking", action="store_true", default=False,
+                        help="是否启用thinking模式")
     args = parser.parse_args()
-    print(f"开始运行测试聊天程序...22222{args}")
+    print(f"开始运行测试聊天程序...{args}")
     # 加载模型和分词器，增加优化参数
     model, tokenizer = load_model_and_tokenizer(
         args.model_path, 
@@ -253,13 +299,14 @@ def main():
         prompt = f"用户：{user_input}\n助手："
         
         try:
-            response = generate_response(
+            response = generate_qwen_response(
                 model, 
                 tokenizer, 
                 prompt, 
                 history=list(history),
                 max_new_tokens=args.max_new_tokens,
-                temperature=args.temperature
+                temperature=args.temperature,
+                enable_thinking=args.enable_thinking
             )
             # 提取助手的回复部分
             assistant_response = response.split("助手：")[-1].strip()

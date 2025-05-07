@@ -10,12 +10,7 @@ import math
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datasets import load_dataset, Dataset, concatenate_datasets
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    StoppingCriteriaList, 
-    StoppingCriteria
-)
+from modelscope import AutoModelForCausalLM,AutoTokenizer
 from peft import PeftModel
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from rouge import Rouge
@@ -196,11 +191,19 @@ def parse_args():
         help="LoRA模型路径"
     )
     
+    # 添加thinking模式参数
+    parser.add_argument(
+        "--enable_thinking",
+        action="store_true",
+        default=False,
+        help="是否启用thinking模式"
+    )
+    
     args = parser.parse_args()
     return args
 
 # 提取公共方法：使用Qwen模式生成文本
-def generate_with_qwen_format(model, tokenizer, prompt, system_prompt, max_new_tokens, temperature=0.7, do_sample=True, top_p=0.7):
+def generate_with_qwen_format(model, tokenizer, prompt, system_prompt, max_new_tokens, temperature=0.7, do_sample=True, top_p=0.7, enable_thinking=False):
     """使用Qwen对话格式生成文本
     
     Args:
@@ -212,84 +215,48 @@ def generate_with_qwen_format(model, tokenizer, prompt, system_prompt, max_new_t
         temperature: 温度
         do_sample: 是否使用采样
         top_p: top-p采样参数
+        enable_thinking: 是否启用thinking模式
         
     Returns:
         生成的文本
     """
-    # 构建Qwen格式输入
-    full_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
-    full_prompt += f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
-    
-    # 处理输入
-    inputs = tokenizer(full_prompt, return_tensors="pt")
-    for k, v in inputs.items():
-        inputs[k] = v.to(model.device)
-    
-    # 设置生成参数 - 修复警告
-    gen_kwargs = {
-        "max_new_tokens": max_new_tokens,
-        "pad_token_id": tokenizer.pad_token_id,
-    }
-    
-    # 只有在启用采样时才设置相关参数
-    if do_sample:
-        gen_kwargs.update({
-            "do_sample": True,
-            "temperature": temperature,
-            "top_p": top_p
-        })
-    else:
-        # 不使用采样时使用贪婪解码
-        gen_kwargs["do_sample"] = False
-    
-    # 添加停止标准
-    generate_signature = inspect.signature(model.generate)
-    if "stopping_criteria" in generate_signature.parameters:
-        # 自定义停止标准
-        class StopOnTokens(StoppingCriteria):
-            def __init__(self, stop_token_ids):
-                self.stop_token_ids = stop_token_ids
-            
-            def __call__(self, input_ids, scores, **kwargs):
-                for stop_id in self.stop_token_ids:
-                    if input_ids[0][-1] == stop_id:
-                        return True
-                return False
-        
-        # 获取终止词的token IDs
-        stop_words_ids = tokenizer.encode("<|im_end|>", add_special_tokens=False)
-        stopping_criteria = StoppingCriteriaList([StopOnTokens(stop_words_ids)])
-        gen_kwargs["stopping_criteria"] = stopping_criteria
-    
-    # 生成回复
-    with torch.no_grad():
-        outputs = model.generate(**inputs, **gen_kwargs)
-    
-    # 解码输出
-    full_response = tokenizer.decode(outputs[0], skip_special_tokens=False)
-    
-    # 提取助手的回复部分
-    assistant_start = "<|im_start|>assistant\n"
-    assistant_end = "<|im_end|>"
-    
-    # 查找最后一个助手部分
-    last_assistant_start = full_response.rfind(assistant_start)
-    if last_assistant_start != -1:
-        response_start = last_assistant_start + len(assistant_start)
-        response_end = full_response.find(assistant_end, response_start)
-        if response_end != -1:
-            generated_text = full_response[response_start:response_end].strip()
-        else:
-            # 如果没有找到结束标记，就取所有剩余文本
-            generated_text = full_response[response_start:].strip()
-    else:
-        # 回退到简单解码
-        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
-    
-    # 打印输入输出
-    logger.info(f"用户输入: {prompt}")
-    logger.info(f"模型生成: {generated_text}")
-    return generated_text
+    messages = []
+    if system_prompt:
+        messages.insert(0, {"role": "system", "content": system_prompt})
+
+    messages.append({"role": "user", "content": prompt})
+
+    # 使用Qwen格式的对话模板
+    text = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=enable_thinking
+    )
+    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+
+    # conduct text completion
+    generated_ids = model.generate(
+        **model_inputs,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature
+    )
+    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
+
+    # parsing thinking content
+    try:
+        # rindex finding 151668 (</think>)
+        index = len(output_ids) - output_ids[::-1].index(151668)
+    except ValueError:
+        index = 0
+
+    thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
+    content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+
+    if enable_thinking:
+        logger.info("thinking content: %s", thinking_content)
+    logger.info("content: %s", content)
+    return content, thinking_content
 
 # 加载多个数据集并合并
 def load_multiple_datasets(dataset_paths_or_names, dataset_split, task_type):
@@ -715,7 +682,8 @@ def evaluate_generation(model, tokenizer, eval_prompts, device, args, use_accele
                 system_prompt=system_prompt,
                 max_new_tokens=args.max_length,
                 temperature=args.temperature,
-                do_sample=True  # 生成任务通常使用采样
+                do_sample=True,  # 生成任务通常使用采样
+                enable_thinking=args.enable_thinking
             )
                 
             results.append({
@@ -826,7 +794,8 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             system_prompt=system_prompt,
             max_new_tokens=args.max_length,
             temperature=0.3,  # 低温度，提高确定性
-            do_sample=False   # 贪婪解码
+            do_sample=False,   # 贪婪解码
+            enable_thinking=args.enable_thinking
         ).strip()
         
         # 1. 精确匹配评估
@@ -1038,7 +1007,8 @@ def evaluate_classification(model, tokenizer, classification_dataset, device, ar
                 system_prompt=system_prompt,
                 max_new_tokens=min(50, args.max_length),
                 temperature=0.1,
-                do_sample=False  # 分类使用贪婪解码更适合
+                do_sample=False,  # 分类使用贪婪解码更适合
+                enable_thinking=args.enable_thinking
             )
             
             # 清理生成的标签
@@ -1874,7 +1844,8 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
                 system_prompt=system_prompt,
                 max_new_tokens=args.max_length,
                 temperature=0.3,   # 低温度保证选择的确定性
-                do_sample=False    # 使用贪婪解码
+                do_sample=False,    # 使用贪婪解码
+                enable_thinking=args.enable_thinking
             ).strip()
             
             # 记录前几个样本的详细信息作为调试信息
