@@ -207,6 +207,7 @@ accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --lora_target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
 
 
+# 训练Qwen3-8B模型
 CUDA_VISIBLE_DEVICES=0 \
 nohup \
 python pretrain_qwen_novel.py \
@@ -227,5 +228,30 @@ python pretrain_qwen_novel.py \
   --lora_rank 16 \
   --lora_alpha 32 \
   --lora_dropout 0.05 \
+  --lora_target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
+  > /dev/null 2>&1 &
+
+
+
+nohup \
+CUDA_VISIBLE_DEVICES=1 \
+python pretrain_qwen_novel.py \
+  --model_name_or_path /data/hf-models/Qwen3-8B \
+  --output_dir output/qwen3_novel_lora_pretrain \
+  --wandb_name qwen3_novel_lora_pretrain \
+  --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 1 \
+  --max_seq_length 4096 \
+  --num_train_epochs 2.0 \
+  --learning_rate 1e-7 \
+  --logging_steps 1 \
+  --fp16 \
+  --gradient_checkpointing \
+  --use_wandb \
+  --use_lora \
+  --lora_rank 16 \
+  --lora_alpha 32 \
+  --lora_dropout 0.01 \
   --lora_target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
   > /dev/null 2>&1 &

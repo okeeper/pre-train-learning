@@ -253,9 +253,6 @@ def generate_with_qwen_format(model, tokenizer, prompt, system_prompt, max_new_t
     thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
     content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
 
-    if enable_thinking:
-        logger.info("thinking content: %s", thinking_content)
-    logger.info("content: %s", content)
     return content, thinking_content
 
 # 加载多个数据集并合并

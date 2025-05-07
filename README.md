@@ -201,6 +201,18 @@ python model_evaluation.py \
     --batch_size 16 \
     --fp16 \
     --use_wandb
+
+python model_evaluation.py \
+    --model_path /data/hf-models/Qwen3-8B \
+    --perplexity_dataset data/xd_eval_preplexity.txt \
+    --novel_name "亵渎" \
+    --qa_dataset ./data/xd_eval_qa2.csv \
+    --single_choice_dataset ./data/xd_eval_choice.csv \
+    --output_dir ./output/evaluation_results \
+    --tasks perplexity,qa,single_choice \
+    --batch_size 16 \
+    --fp16 \
+    --use_wandb
 ```
 
 

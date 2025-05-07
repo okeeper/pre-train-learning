@@ -728,4 +728,8 @@ def main():
     logger.info("预训练完成!")
 
 if __name__ == "__main__":
-    main()
+    try:    
+        main()
+    except Exception as e:
+        logger.error(f"发生异常: {str(e)}")
+        raise
