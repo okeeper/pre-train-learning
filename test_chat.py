@@ -221,7 +221,7 @@ def main():
     parser.add_argument("--history_length", type=int, default=3,
                         help="保存的对话历史轮数（默认：3）")
     args = parser.parse_args()
-    
+    print(f"开始运行测试聊天程序...22222{args}")
     # 加载模型和分词器，增加优化参数
     model, tokenizer = load_model_and_tokenizer(
         args.model_path, 
