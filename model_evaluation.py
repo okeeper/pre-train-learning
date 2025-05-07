@@ -796,7 +796,7 @@ def evaluate_qa(model, tokenizer, qa_dataset, device, args, use_accelerate=False
             temperature=0.3,  # 低温度，提高确定性
             do_sample=False,   # 贪婪解码
             enable_thinking=args.enable_thinking
-        ).strip()
+        )
         
         # 1. 精确匹配评估
         exact_match = generated_answer.lower() == expected_answer.lower()
@@ -1837,7 +1837,7 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
         # 生成答案
         system_prompt = f"你是一个小说《{args.novel_name}》阅读助手。请根据小说内容回答下面单选题，只回答问题要求的内容，不要解释原因，直接给出单个选项字母。"
         try:
-            generated_answer = generate_with_qwen_format(
+            generated_answer, thinking_content = generate_with_qwen_format(
                 model=model,
                 tokenizer=tokenizer,
                 prompt=prompt,
@@ -1846,7 +1846,7 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
                 temperature=0.3,   # 低温度保证选择的确定性
                 do_sample=False,    # 使用贪婪解码
                 enable_thinking=args.enable_thinking
-            ).strip()
+            )
             
             # 记录前几个样本的详细信息作为调试信息
             if i < 3:
@@ -1855,6 +1855,7 @@ def evaluate_multiple_choice(model, tokenizer, mc_dataset, device, args, use_acc
                 logger.info(f"选项: {options_text}")
                 logger.info(f"正确答案: {correct_answer}")
                 logger.info(f"生成答案: {generated_answer}")
+                logger.info(f"思考内容: {thinking_content}")
         except Exception as e:
             logger.error(f"生成答案时出错: {e}")
             generated_answer = ""
