@@ -1,4 +1,6 @@
 import argparse
+from peft import PeftModel
+
 
 if __name__ == "__main__":
     print("开始运行测试程序...")
