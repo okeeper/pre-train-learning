@@ -1,4 +1,3 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import argparse
 from peft import PeftModel
