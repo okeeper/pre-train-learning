@@ -230,3 +230,18 @@ pip install torch==2.0.1+cu118 -f https://download.pytorch.org/whl/torch_stable.
 
 pip install -i https://mirrors.aliyun.com/pypi/simple torch==2.0.1+cu118
 ```
+
+
+
+# 监控gpu启动
+```
+
+./run_on_idle_gpu.sh 'accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py --model_name_or_path /data/hf-models/Qwen3-8B --output_dir output/qwen3_novel_full_pretrain --wandb_name qwen3_novel_full_pretrain --file_pattern "pretrain_output/novel_pretrain_data.jsonl" --per_device_train_batch_size 2 --gradient_accumulation_steps 8 --max_seq_length 4096 --num_train_epochs 1.0 --learning_rate 2e-5 --fp16 --gradient_checkpointing --use_wandb'
+```
+
+-m <阈值>：内存使用率阈值，低于此值视为空闲 (默认: 20.0%)
+-u <阈值>：计算负载阈值，低于此值视为空闲 (默认: 10.0%)
+-i <秒数>：检查间隔时间，单位秒 (默认: 60)
+-n <次数>：连续几次检查空闲才执行命令 (默认: 3)
+-g <GPU ID>：指定要监控的GPU ID，不指定则监控所有GPU
+-r：命令执行完毕后继续监控并在GPU空闲时再次执行
