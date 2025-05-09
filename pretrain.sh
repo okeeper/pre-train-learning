@@ -182,7 +182,7 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --deepspeed ds_config.json
 
 
-accelerate launch --config_file accelerate_config.yaml --main_process_port 0  pretrain_qwen_novel.py \
+accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
