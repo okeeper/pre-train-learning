@@ -1,6 +1,6 @@
 {
   "zero_optimization": {
-    "stage": 0,
+    "stage": 1,
     "allgather_partitions": false,
     "allgather_bucket_size": 5e8,
     "overlap_comm": false,
@@ -10,7 +10,7 @@
   },
   
   "fp16": {
-    "enabled": true,
+    "enabled": false,
     "loss_scale": 0,
     "loss_scale_window": 1000,
     "initial_scale_power": 16,
