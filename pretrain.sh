@@ -198,7 +198,7 @@ accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --deepspeed ds_config.json
   
 
-  
+
   \
   --use_lora \
   --lora_rank 16 \
@@ -255,3 +255,20 @@ python pretrain_qwen_novel.py \
   --lora_dropout 0.01 \
   --lora_target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
   > /dev/null 2>&1 &
+
+
+nohup accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
+  --model_name_or_path /data/hf-models/Qwen3-8B \
+  --output_dir output/qwen3_novel_full_pretrain \
+  --wandb_name qwen3_novel_full_pretrain \
+  --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 8 \
+  --max_seq_length 4096 \
+  --num_train_epochs 1.5 \
+  --learning_rate 1e-7 \
+  --logging_steps 1 \
+  --gradient_checkpointing \
+  --use_wandb \
+  --deepspeed ds_config.json \
+> /dev/null 2>&1 &
