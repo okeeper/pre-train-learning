@@ -1,7 +1,6 @@
 {
   "zero_optimization": {
-    "stage": 1,
-    "contiguous_gradients": true
+    "stage": 1
   },
   
   "fp16": {
@@ -9,5 +8,9 @@
   },
   
   "train_micro_batch_size_per_gpu": "auto",
-  "gradient_accumulation_steps": "auto"
+  "gradient_accumulation_steps": "auto",
+  
+  "communication_data_type": "fp16",
+  "prescale_gradients": false,
+  "gradient_predivide_factor": 1.0
 }
