@@ -573,7 +573,6 @@ def main():
         args.model_name_or_path, 
         config=model_config,
         quantization_config=quantization_config,
-        device_map="auto" if torch.cuda.is_available() else None,
         torch_dtype=torch.float16 if args.fp16 and torch.cuda.is_available() else None,
     )
     
