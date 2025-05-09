@@ -236,7 +236,19 @@ pip install -i https://mirrors.aliyun.com/pypi/simple torch==2.0.1+cu118
 # 监控gpu启动
 ```
 
-./run_on_idle_gpu.sh 'accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py --model_name_or_path /data/hf-models/Qwen3-8B --output_dir output/qwen3_novel_full_pretrain --wandb_name qwen3_novel_full_pretrain --file_pattern "pretrain_output/novel_pretrain_data.jsonl" --per_device_train_batch_size 2 --gradient_accumulation_steps 8 --max_seq_length 4096 --num_train_epochs 1.0 --learning_rate 2e-5 --fp16 --gradient_checkpointing --use_wandb'
+./run_on_idle_gpu.sh -g 0 -m 30 -i 10 'accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
+  --model_name_or_path /data/hf-models/Qwen3-8B \
+  --output_dir output/qwen3_novel_full_pretrain \
+  --wandb_name qwen3_novel_full_pretrain \
+  --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 8 \
+  --max_seq_length 4096 \
+  --num_train_epochs 1.0 \
+  --learning_rate 2e-5 \
+  --fp16 \
+  --gradient_checkpointing \
+  --use_wandb'
 ```
 
 -m <阈值>：内存使用率阈值，低于此值视为空闲 (默认: 20.0%)
