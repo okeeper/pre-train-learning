@@ -1,30 +1,42 @@
 {
   "zero_optimization": {
-    "stage": 0,
-    "allgather_partitions": false,
-    "allgather_bucket_size": 5e8,
-    "overlap_comm": false,
-    "reduce_scatter": false,
-    "reduce_bucket_size": 5e8,
-    "contiguous_gradients": false
+    "stage": 2,
+    "offload_optimizer": {
+      "device": "cpu",
+      "pin_memory": true
+    },
+    "offload_param": {
+      "device": "cpu",
+      "pin_memory": true
+    },
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "stage3_param_persistence_threshold": 1e6,
+    "stage3_max_live_parameters": 1e9,
+    "stage3_max_reuse_distance": 1e9,
+    "gather_fp16_weights_on_model_save": true
   },
   
   "fp16": {
     "enabled": "auto",
     "loss_scale": 0,
-    "loss_scale_window": 1000,
-    "initial_scale_power": 16,
-    "hysteresis": 2,
-    "min_loss_scale": 1
+    "initial_scale_power": 16
   },
   
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": "auto",
+      "betas": "auto",
+      "eps": "auto",
+      "weight_decay": "auto"
+    }
+  },
+  
+  "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
   "gradient_accumulation_steps": "auto",
-  
-  "communication_data_type": "fp16",
-  "prescale_gradients": false,
-  "gradient_predivide_factor": 1.0,
-  
-  "wall_clock_breakdown": false,
-  "zero_allow_untested_optimizer": false
+  "gradient_clipping": "auto",
+  "zero_allow_untested_optimizer": true,
+  "communication_data_type": "fp16"
 }
