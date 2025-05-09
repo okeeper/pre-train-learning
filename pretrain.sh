@@ -182,10 +182,10 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --deepspeed ds_config.json
 
 
-accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
+accelerate launch --config_file accelerate_config.yaml --main_process_port 0  pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
-  --output_dir output/qwen3_novel_lora_pretrain \
-  --wandb_name qwen3_novel_lora_pretrain \
+  --output_dir output/qwen3_novel_full_pretrain \
+  --wandb_name qwen3_novel_full_pretrain \
   --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
   --per_device_train_batch_size 2 \
   --gradient_accumulation_steps 8 \
@@ -194,7 +194,9 @@ accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --learning_rate 2e-5 \
   --fp16 \
   --gradient_checkpointing \
-  --use_wandb \
+  --use_wandb 
+  
+  \
   --use_lora \
   --lora_rank 16 \
   --lora_alpha 32 \
