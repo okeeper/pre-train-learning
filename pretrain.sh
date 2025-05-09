@@ -194,7 +194,10 @@ accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --learning_rate 2e-5 \
   --fp16 \
   --gradient_checkpointing \
-  --use_wandb 
+  --use_wandb \
+  --deepspeed ds_config.json
+  
+
   
   \
   --use_lora \

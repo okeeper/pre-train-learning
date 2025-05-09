@@ -15,60 +15,7 @@ conda activate pre-train
 ### 2. 安装必要依赖
 ```bash
 # 安装基础依赖
-pip install openai backoff tqdm
-
-# 如果需要使用本地模型（可选）
-pip install torch
-pip install modelscope transformers peft datasets
-```
-
-### 3. OpenAI API配置
-程序首次运行时会提示配置API，您可以选择：
-
-1. 通过环境变量设置：
-```bash
-# Linux/Mac
-export OPENAI_API_KEY="你的API密钥"
-export OPENAI_API_BASE="你的API基础URL"  # 可选，如果使用代理
-
-# Windows
-set OPENAI_API_KEY=你的API密钥
-set OPENAI_API_BASE=你的API基础URL  # 可选，如果使用代理
-```
-
-2. 运行程序时根据提示输入
-
-## 使用说明
-
-### 1. 准备小说文本
-- 文件第一行应包含用`<>`括起的小说标题，如：`<西游记>`
-- 章节标题行应该顶格或只有一个空格缩进
-- 正文段落应该有两个以上空格缩进
-
-### 2. 运行程序
-```bash
-# 确保在novel_qa环境中
-conda activate novel_qa
-
-# 运行程序
-python prepare_qwen_qa.py
-```
-
-## 输出文件
-程序会在`data`目录下生成：
-- `novel_chunks.json`: 分割后的小说章节
-- `novel_qa_data.jsonl`: 生成的问答训练数据
-
-## 常用conda命令
-```bash
-# 查看当前环境
-conda env list
-
-# 退出环境
-conda deactivate
-
-# 删除环境（如需要）
-conda remove --name novel_qa --all
+pip install -r requirements.txt
 ```
 
 
@@ -79,7 +26,7 @@ conda activate llama-factory
 conda activate zye
 ```
 
-
+## 分布式多线DPP启动
 ```shell
 python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --output_dir output/qwen1.5b_xd_pretrain \
@@ -97,7 +44,43 @@ python -m torch.distributed.launch --nproc_per_node=2 pretrain_qwen_novel.py \
   --use_wandb
 ```
 
-## chat
+## 单卡预训练
+```shell
+python pretrain_qwen_novel.py \
+  --model_name_or_path output/qwen_novel_pretrain_knowledge \
+  --output_dir output/qwen_novel_pretrain_knowledge2 \
+  --wandb_name qwen_novel_pretrain_knowledge2 \
+  --file_pattern "xd_chunks_1024.json" \
+  --per_device_train_batch_size 4 \
+  --gradient_accumulation_steps 2 \
+  --max_seq_length 1024 \
+  --num_train_epochs 1 \
+  --learning_rate 1e-5 \
+  --logging_steps 5 \
+  --use_wandb
+```
+
+## acclerate分布式启动
+```shell
+accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
+  --model_name_or_path /data/hf-models/Qwen3-8B \
+  --output_dir output/qwen3_novel_full_pretrain \
+  --wandb_name qwen3_novel_full_pretrain \
+  --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 8 \
+  --max_seq_length 4096 \
+  --num_train_epochs 1.0 \
+  --learning_rate 2e-5 \
+  --fp16 \
+  --gradient_checkpointing \
+  --use_wandb \
+  --deepspeed ds_config.json
+  
+```
+
+
+## 启动chat程序
 ```shell
 
 python test_chat.py --model_path output/output/qwen_novel_pretrain_long \
@@ -239,6 +222,10 @@ pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 # 或使用阿里云源
 pip config set global.index-url https://mirrors.aliyun.com/pypi/simple
 
+pip install transformers==4.31.0  # 一个稳定且兼容性强的版本
+
+# 降级PyTorch版本, 解决PyTorch 2.6的分布式张量(DTensor)功能与普通张量混合使用时出现了冲突。
+pip install torch==2.0.1+cu118 -f https://download.pytorch.org/whl/torch_stable.html -i https://mirrors.aliyun.com/pypi/simple
 
 pip install -i https://mirrors.aliyun.com/pypi/simple torch==2.0.1+cu118
 ```
