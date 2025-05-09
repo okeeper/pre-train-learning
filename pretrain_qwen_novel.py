@@ -3,7 +3,26 @@ import json
 import glob
 from typing import List, Dict, Any, Optional
 
+# 禁用PyTorch DTensor的__torch_dispatch__机制，避免与DeepSpeed冲突
+os.environ["TORCH_DISTRIBUTED_DTENSOR_SPAWN_DRIVER"] = "0"
+# 禁用PyTorch编译优化
+os.environ["TORCH_COMPILE_DISABLE_CUDA_GRAPH"] = "1" 
+
+# 在导入torch之前设置环境变量
 import torch
+# 禁用DTensor的分发机制
+if hasattr(torch, 'distributed') and hasattr(torch.distributed, 'tensor'):
+    import types
+    if hasattr(torch.distributed.tensor, '_api'):
+        try:
+            torch.distributed.tensor._api.__torch_dispatch__ = types.MethodType(
+                lambda *args, **kwargs: NotImplemented, 
+                torch.distributed.tensor._api
+            )
+            print("成功禁用DTensor分发机制，解决DeepSpeed冲突")
+        except Exception as e:
+            print(f"禁用DTensor时出错: {e}")
+
 from torch.utils.data import Dataset, DataLoader
 import transformers
 from transformers import (

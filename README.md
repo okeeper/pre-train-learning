@@ -240,5 +240,5 @@ pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 pip config set global.index-url https://mirrors.aliyun.com/pypi/simple
 
 
-pip install -i https://mirrors.aliyun.com/pypi/simple modelscope
+pip install -i https://mirrors.aliyun.com/pypi/simple deepspeed --upgrade
 ```
