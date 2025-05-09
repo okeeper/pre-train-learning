@@ -26,5 +26,5 @@
   "gradient_predivide_factor": 1.0,
   
   "wall_clock_breakdown": false,
-  "zero_allow_untested_optimizer": false
-}
+  "zero_allow_untested_optimizer": true
+} 
