@@ -6,13 +6,14 @@
 
 ### 1. 创建并激活conda环境
 ```bash
-# 创建Python环境
-conda create -n pre-train python=3.10
-# 激活环境
-conda activate pre-train
+conda create -n qwen_train_new python=3.10
+conda activate qwen_train_new
+conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 -c pytorch -c nvidia
 ```
 
 ### 2. 安装必要依赖
+
+
 ```bash
 # 安装基础依赖
 pip install -r requirements.txt

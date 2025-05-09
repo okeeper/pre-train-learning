@@ -21,9 +21,6 @@
    seaborn
    sentencepiece==0.1.99
    tokenizers==0.14.1
-   torchaudio==2.5.1+cu124
-   torch==2.5.1+cu124
-   torchvision==0.20.1+cu124
    tqdm==4.65.0
    transformers==4.51.3
    wandb==0.15.11
