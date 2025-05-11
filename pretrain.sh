@@ -257,7 +257,8 @@ python pretrain_qwen_novel.py \
   > /dev/null 2>&1 &
 
 
-nohup accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
+nohup \
+accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
