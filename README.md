@@ -277,3 +277,9 @@ nohup accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel
 -n <次数>：连续几次检查空闲才执行命令 (默认: 3)
 -g <GPU ID>：指定要监控的GPU ID，不指定则监控所有GPU
 -r：命令执行完毕后继续监控并在GPU空闲时再次执行
+
+
+# 监控
+```
+watch -n 1 nvidia-smi
+```
