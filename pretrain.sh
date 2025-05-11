@@ -266,7 +266,7 @@ accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
   --file_pattern "xd_chunks_512.json" \
-  --per_device_train_batch_size 1 \
+  --per_device_train_batch_size 4 \
   --gradient_accumulation_steps 8 \
   --max_seq_length 512 \
   --num_train_epochs 1.5 \
