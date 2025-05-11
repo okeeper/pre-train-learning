@@ -6,5 +6,6 @@
     "enabled": "auto"
   },
   "train_batch_size": 32,
-  "train_micro_batch_size_per_gpu": 2
+  "train_micro_batch_size_per_gpu": 2,
+  "gradient_accumulation_steps": 8
 }
