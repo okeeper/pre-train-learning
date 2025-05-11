@@ -250,14 +250,17 @@ class NovelChunksDataset(Dataset):
         # 去除可能的重复文件
         json_files = list(set(json_files))
         
-        logger.info(f"找到{len(json_files)}个数据文件: {json_files}")
+        # 只在主进程打印信息
+        if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
+            logger.info(f"找到{len(json_files)}个数据文件: {json_files}")
         
         # 加载所有文件的数据
         for json_file in json_files:
             try:
                 # 检查文件扩展名，处理不同格式
                 if json_file.endswith('.jsonl'):
-                    logger.info(f"加载JSONL文件: {json_file}")
+                    if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
+                        logger.info(f"加载JSONL文件: {json_file}")
                     # 处理JSONL格式
                     with open(json_file, 'r', encoding='utf-8') as f:
                         for line in f:
@@ -273,7 +276,8 @@ class NovelChunksDataset(Dataset):
                             except json.JSONDecodeError as je:
                                 logger.warning(f"解析JSONL行时出错: {str(je)}")
                 else:
-                    logger.info(f"加载JSON文件: {json_file}")
+                    if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
+                        logger.info(f"加载JSON文件: {json_file}")
                     # 处理JSON格式
                     with open(json_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
@@ -294,27 +298,55 @@ class NovelChunksDataset(Dataset):
             except Exception as e:
                 logger.error(f"处理文件{json_file}时出错: {str(e)}")
         
-        logger.info(f"总共加载了{len(self.examples)}个文本片段")
+        if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
+            logger.info(f"总共加载了{len(self.examples)}个文本片段")
         
-        # 增加预处理优化
+        # 优化预处理：按进程分片处理数据
+        if torch.distributed.is_initialized():
+            world_size = torch.distributed.get_world_size()
+            rank = torch.distributed.get_rank()
+            
+            # 将数据按进程数分片
+            total_samples = len(self.examples)
+            samples_per_rank = total_samples // world_size
+            start_idx = rank * samples_per_rank
+            end_idx = start_idx + samples_per_rank if rank < world_size - 1 else total_samples
+            self.examples = self.examples[start_idx:end_idx]
+            
+            logger.info(f"Rank {rank}: 处理 {len(self.examples)} 个样本，范围 {start_idx}-{end_idx-1}")
+            # 确保各进程处理完分片数据后同步
+            torch.distributed.barrier()
+        
+        # 分批进行预处理，减少内存压力
         self.tokenized_examples = []
-        for text in self.examples:
-            # 预先处理所有数据，避免训练时的瓶颈
+        batch_size = 100  # 调整批处理大小
+        for i in range(0, len(self.examples), batch_size):
+            batch_texts = self.examples[i:i+batch_size]
+            
+            # 使用批处理进行tokenize
             encodings = self.tokenizer(
-                text,
+                batch_texts,
                 truncation=True,
                 max_length=max_seq_length,
                 padding="max_length",
                 return_tensors="pt",
             )
             
-            item = {
-                "input_ids": encodings["input_ids"].squeeze(0),
-                "attention_mask": encodings["attention_mask"].squeeze(0),
-            }
-            
-            item["labels"] = item["input_ids"].clone()
-            self.tokenized_examples.append(item)
+            for j in range(len(batch_texts)):
+                item = {
+                    "input_ids": encodings["input_ids"][j],
+                    "attention_mask": encodings["attention_mask"][j],
+                }
+                item["labels"] = item["input_ids"].clone()
+                self.tokenized_examples.append(item)
+                
+            # 每处理一批就清理内存
+            del encodings
+            if i % 1000 == 0 and i > 0:
+                torch.cuda.empty_cache()
+        
+        # 清理原始数据以节省内存
+        self.examples = None
         
         logger.info(f"预处理完成，共有 {len(self.tokenized_examples)} 个样本")
 
@@ -322,7 +354,7 @@ class NovelChunksDataset(Dataset):
         return len(self.tokenized_examples)
 
     def __getitem__(self, idx):
-        # 直接返回预处理好的数据
+        # 返回预处理好的数据，确保不会重复大量计算
         return self.tokenized_examples[idx]
 
 
@@ -500,7 +532,18 @@ def print_training_config(args, model_config, train_dataset, is_distributed):
 def main():
     # 忽略 SIGHUP 信号
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
-
+    
+    # 添加优化GPU负载均衡的环境变量
+    os.environ["NCCL_DEBUG"] = "INFO"
+    os.environ["NCCL_P2P_DISABLE"] = "0"
+    os.environ["NCCL_IB_DISABLE"] = "0"
+    os.environ["NCCL_SOCKET_IFNAME"] = "eth0"  # 根据实际网络接口调整
+    
+    # 优化CUDA设置
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        # 设置缓存内存分配模式
+        torch.cuda.empty_cache()
     
     args = parse_args()
     set_seed(args.seed)
@@ -515,6 +558,9 @@ def main():
         # 仅初始化一次分布式环境
         if not torch.distributed.is_initialized():
             torch.distributed.init_process_group(backend="nccl")
+            
+        # 使用barrier确保所有进程同步启动
+        torch.distributed.barrier()
             
         logger.info(f"使用分布式训练，rank={args.local_rank}，设备={torch.cuda.current_device()}")
     
