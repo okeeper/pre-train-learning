@@ -257,15 +257,18 @@ python pretrain_qwen_novel.py \
   > /dev/null 2>&1 &
 
 
+# 启用内存优化环境变量
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128"
+
 nohup \
 accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
-  --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --file_pattern "xd_chunks_512.json" \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 8 \
-  --max_seq_length 4096 \
+  --max_seq_length 512 \
   --num_train_epochs 1.5 \
   --learning_rate 1e-7 \
   --logging_steps 1 \
