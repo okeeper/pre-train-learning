@@ -673,7 +673,7 @@ def main():
         fp16=args.fp16,
         remove_unused_columns=False,
         report_to=["wandb"] if args.use_wandb and is_main_process else [],
-        run_name=wandb.run.name if is_main_process() else None,
+        run_name=wandb.run.name if is_main_process else None,
         
         # 只在非主进程禁用进度条
         disable_tqdm=not is_main_process,

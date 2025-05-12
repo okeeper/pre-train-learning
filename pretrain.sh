@@ -165,6 +165,22 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --deepspeed ds_config.json
 
 
+deepspeed --num_gpus=2 pretrain_qwen_novel.py \
+  --model_name_or_path   /data/hf-models/Qwen3-8B \
+  --output_dir output/qwen3_novel_pretrain_mix \
+  --wandb_name qwen3_novel_pretrain_mix \
+  --file_pattern "xd_chunks_1024.json,xd_chunks_512.json" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 8 \
+  --logging_steps 1 \
+  --max_seq_length 1024 \
+  --num_train_epochs 1.0 \
+  --learning_rate 1e-6 \
+  --gradient_checkpointing \
+  --use_wandb \
+  --deepspeed ds_config.json
+
+
 # 使用LoRA训练Qwen3-8B模型 - 更高效内存使用版本
 deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
@@ -276,3 +292,19 @@ accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --use_wandb \
   --deepspeed ds_config.json \
 > /dev/null 2>&1 &
+
+
+deepspeed --num_gpus=2 pretrain_qwen_novel.py \
+  --model_name_or_path   /data/hf-models/Qwen3-8B \
+  --output_dir output/qwen3_novel_full_pt_1024 \
+  --wandb_name qwen3_novel_full_pt_1024 \
+  --file_pattern "xd_chunks_1024.json" \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 8 \
+  --logging_steps 1 \
+  --max_seq_length 1024 \
+  --num_train_epochs 1.0 \
+  --learning_rate 1e-6 \
+  --gradient_checkpointing \
+  --use_wandb \
+  --deepspeed ds_config.json
