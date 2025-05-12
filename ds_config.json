@@ -30,7 +30,7 @@
   "wall_clock_breakdown": false,
 
   "communication_options": {
-    "port": 29518,
-    "rendezvous_port": 29538
+    "port": 30518,
+    "rendezvous_port": 30538
   }
 }
