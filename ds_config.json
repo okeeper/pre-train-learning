@@ -27,5 +27,10 @@
   "steps_per_print": "auto",
   "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
-  "wall_clock_breakdown": false
+  "wall_clock_breakdown": false,
+
+  "communication_options": {
+    "port": 29518,
+    "rendezvous_port": 29538
+  }
 }
