@@ -102,8 +102,12 @@ python test_chat.py --model_path /data/hf-models/Qwen3-8B \
 --cpu_offload
 
 
+
+python test_chat.py --model_path output/qwen3_novel_full_pt_1024 \
+--max_new_tokens 1024 --temperature 0.7
+
 # 使用LoRA
-python test_chat.py --model_path /data/hf-models/Qwen3-8B \
+python test_chat.py --model_path output/qwen3_novel_full_pt_1024 \
 --lora_path output/qwen3_novel_lora_pretrain \
 --max_new_tokens 1024 --temperature 0.7
 

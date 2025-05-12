@@ -187,8 +187,8 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
   --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
-  --per_device_train_batch_size 2 \
-  --gradient_accumulation_steps 16 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 8 \
   --max_seq_length 4096 \
   --num_train_epochs 1.0 \
   --learning_rate 2e-5 \
@@ -203,7 +203,7 @@ accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
   --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
-  --per_device_train_batch_size 2 \
+  --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 8 \
   --max_seq_length 4096 \
   --num_train_epochs 1.0 \

@@ -319,7 +319,7 @@ class NovelChunksDataset(Dataset):
         
         # 分批进行预处理，减少内存压力
         self.tokenized_examples = []
-        batch_size = 100  # 调整批处理大小
+        batch_size = 10  # 调整批处理大小
         for i in range(0, len(self.examples), batch_size):
             batch_texts = self.examples[i:i+batch_size]
             
@@ -342,7 +342,7 @@ class NovelChunksDataset(Dataset):
                 
             # 每处理一批就清理内存
             del encodings
-            if i % 1000 == 0 and i > 0:
+            if i % 10 == 0 and i > 0:
                 torch.cuda.empty_cache()
         
         # 清理原始数据以节省内存
@@ -763,3 +763,15 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"发生异常: {str(e)}")
         raise
+    finally:
+        # 无论是正常结束还是异常退出，都确保清理资源
+        if torch.distributed.is_initialized():
+            logger.info("正在关闭分布式训练环境...")
+            torch.distributed.destroy_process_group()
+        
+        # 清理CUDA缓存
+        if torch.cuda.is_available():
+            logger.info("正在清理CUDA缓存...")
+            torch.cuda.empty_cache()
+            
+        logger.info("程序退出，资源已清理")
