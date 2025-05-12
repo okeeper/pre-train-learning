@@ -533,15 +533,8 @@ def main():
     # 忽略 SIGHUP 信号
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     
-    # 添加优化GPU负载均衡的环境变量
-    os.environ["NCCL_DEBUG"] = "INFO"
-    os.environ["NCCL_P2P_DISABLE"] = "0"
-    os.environ["NCCL_IB_DISABLE"] = "0"
-    os.environ["NCCL_SOCKET_IFNAME"] = "eth0"  # 根据实际网络接口调整
-    
     # 优化CUDA设置
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = True
         # 设置缓存内存分配模式
         torch.cuda.empty_cache()
     
@@ -583,8 +576,8 @@ def main():
             name=args.wandb_name or f"qwen-pretrain-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
             config=vars(args),
         )
-        # 启用进度条报告
-        wandb.config.update({"enable_progress_tracking": True})
+    else:
+        os.environ["WANDB_MODE"] = "disabled"
     
     # 加载模型配置和分词器
     logger.info(f"加载模型配置: {args.model_name_or_path}")
@@ -593,8 +586,6 @@ def main():
         model_config.use_cache = False
     
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
-    tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "right"
     
     # 加载模型 - 根据是否使用量化调整参数
     logger.info(f"加载预训练模型: {args.model_name_or_path}")
@@ -680,25 +671,24 @@ def main():
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
         fp16=args.fp16,
-        save_total_limit=3,
         remove_unused_columns=False,
-        dataloader_num_workers=4,
-        dataloader_pin_memory=True,
         report_to=["wandb"] if args.use_wandb and is_main_process else [],
-        run_name=args.wandb_name,
+        run_name=wandb.run.name if is_main_process() else None,
         
         # 只在非主进程禁用进度条
         disable_tqdm=not is_main_process,
         
         # 分布式训练参数
         local_rank=args.local_rank,
-        ddp_find_unused_parameters=False,
 
         # 添加8位优化器支持
         optim=args.optim,
 
         # 添加DeepSpeed支持
         deepspeed=args.deepspeed,
+
+        adam_beta1 = 0.8,
+        adam_beta2 = 0.99,
     )
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
@@ -765,10 +755,6 @@ def main():
     if is_distributed and torch.distributed.is_initialized():
         torch.distributed.destroy_process_group()
     
-     # 训练后主动清理内存
-    model = model.cpu()
-    torch.cuda.empty_cache()
-
     logger.info("预训练完成!")
 
 if __name__ == "__main__":
