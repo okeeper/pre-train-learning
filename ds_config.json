@@ -19,12 +19,16 @@
   },
 
   "zero_optimization": {
-      "stage": 2
+      "stage": 2,
+      "overlap_comm": true,
+      "contiguous_gradients": true,
+      "allgather_bucket_size": 5e8,
+      "reduce_bucket_size": 5e8
   },
 
   "gradient_accumulation_steps": "auto",
   "gradient_clipping": "auto",
-  "steps_per_print": "auto",
+  "steps_per_print": 1,
   "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
   "wall_clock_breakdown": false,
@@ -32,5 +36,9 @@
   "communication_options": {
     "port": 30518,
     "rendezvous_port": 30538
+  },
+  
+  "data_efficiency": {
+    "data_parallel_random_init": true
   }
 }

@@ -244,8 +244,12 @@ class NovelChunksDataset(Dataset):
         
         # 获取所有符合文件模式的JSON文件
         for pattern in patterns:
-            matched_files = glob.glob(os.path.join(data_dir, pattern))
-            json_files.extend(matched_files)
+            if os.path.isfile(pattern):
+                # 支持直接传入文件路径
+                json_files.append(pattern)
+            else:
+                matched_files = glob.glob(os.path.join(data_dir, pattern))
+                json_files.extend(matched_files)
         
         # 去除可能的重复文件
         json_files = list(set(json_files))
@@ -300,62 +304,29 @@ class NovelChunksDataset(Dataset):
         
         if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
             logger.info(f"总共加载了{len(self.examples)}个文本片段")
-        
-        # 优化预处理：按进程分片处理数据
-        if torch.distributed.is_initialized():
-            world_size = torch.distributed.get_world_size()
-            rank = torch.distributed.get_rank()
-            
-            # 将数据按进程数分片
-            total_samples = len(self.examples)
-            samples_per_rank = total_samples // world_size
-            start_idx = rank * samples_per_rank
-            end_idx = start_idx + samples_per_rank if rank < world_size - 1 else total_samples
-            self.examples = self.examples[start_idx:end_idx]
-            
-            logger.info(f"Rank {rank}: 处理 {len(self.examples)} 个样本，范围 {start_idx}-{end_idx-1}")
-            # 确保各进程处理完分片数据后同步
-            torch.distributed.barrier()
-        
-        # 分批进行预处理，减少内存压力
-        self.tokenized_examples = []
-        batch_size = 10  # 调整批处理大小
-        for i in range(0, len(self.examples), batch_size):
-            batch_texts = self.examples[i:i+batch_size]
-            
-            # 使用批处理进行tokenize
-            encodings = self.tokenizer(
-                batch_texts,
-                truncation=True,
-                max_length=max_seq_length,
-                padding="max_length",
-                return_tensors="pt",
-            )
-            
-            for j in range(len(batch_texts)):
-                item = {
-                    "input_ids": encodings["input_ids"][j],
-                    "attention_mask": encodings["attention_mask"][j],
-                }
-                item["labels"] = item["input_ids"].clone()
-                self.tokenized_examples.append(item)
-                
-            # 每处理一批就清理内存
-            del encodings
-            if i % 10 == 0 and i > 0:
-                torch.cuda.empty_cache()
-        
-        # 清理原始数据以节省内存
-        self.examples = None
-        
-        logger.info(f"预处理完成，共有 {len(self.tokenized_examples)} 个样本")
 
     def __len__(self):
-        return len(self.tokenized_examples)
+        return len(self.examples)
 
     def __getitem__(self, idx):
-        # 返回预处理好的数据，确保不会重复大量计算
-        return self.tokenized_examples[idx]
+        # 按需进行tokenize处理，而不是预先处理所有数据
+        text = self.examples[idx]
+        encoding = self.tokenizer(
+            text,
+            truncation=True,
+            max_length=self.max_seq_length,
+            padding="max_length",
+            return_tensors="pt",
+        )
+        
+        # 移除批处理维度
+        item = {
+            "input_ids": encoding["input_ids"].squeeze(0),
+            "attention_mask": encoding["attention_mask"].squeeze(0),
+        }
+        item["labels"] = item["input_ids"].clone()
+        
+        return item
 
 
 def setup_wandb(args):
@@ -659,6 +630,7 @@ def main():
     if is_main_process:
         print_training_config(args, model_config, train_dataset, is_distributed)
 
+    # 使用DeepSpeed原生数据加载方式
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True,
@@ -680,7 +652,10 @@ def main():
         
         # 分布式训练参数
         local_rank=args.local_rank,
-
+        dataloader_num_workers=4,  # 增加数据加载器工作线程
+        dataloader_pin_memory=True,  # 启用内存固定加速数据传输
+        ddp_find_unused_parameters=False,  # 关闭未使用参数检测提高性能
+        
         # 添加8位优化器支持
         optim=args.optim,
 
