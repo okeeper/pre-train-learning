@@ -501,6 +501,7 @@ def main():
     
     # 初始化DeepSpeed分布式环境
     deepspeed.init_distributed() if args.deepspeed else None
+    
     is_main_process = not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
     is_distributed = args.deepspeed or torch.distributed.is_initialized()
     
@@ -543,11 +544,6 @@ def main():
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
     
-    # DeepSpeed引擎初始化
-    if args.deepspeed:
-        with open(args.deepspeed, 'r') as f:
-            ds_config = json.load(f)
-        model, _, _, _ = deepspeed.initialize(model=model, config_params=ds_config)
     
     logger.info(f"加载SFT训练数据: {args.data_dir}")
     full_dataset = SFTDataset(
