@@ -32,6 +32,8 @@ from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_t
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # 内存优化设置
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:128"
+# 内存碎片化处理
+os.environ["MALLOC_CONF"] = "background_thread:true,metadata_thp:auto,dirty_decay_ms:30000,muzzy_decay_ms:30000"
 
 # 设置日志
 logging.basicConfig(
@@ -44,6 +46,25 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# 重定向 tqdm 输出到日志
+class TqdmToLogger:
+    def __init__(self, logger, level=logging.INFO):
+        self.logger = logger
+        self.level = level
+        self.last_msg = ""
+
+    def write(self, buf):
+        if buf.strip() and buf.strip() != self.last_msg:
+            self.last_msg = buf.strip()
+            self.logger.log(self.level, buf.strip())
+            
+    def flush(self):
+        pass
+
+# 替换 tqdm 的文件描述符
+import tqdm.std
+tqdm.std.sys.stdout = TqdmToLogger(logger)
 
 args = None
 
