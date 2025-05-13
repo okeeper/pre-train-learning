@@ -24,7 +24,7 @@ python sft_qwen_novel.py \
   --file_pattern "sft/xd_final_sft.json,sft/alpaca_zh_demo.json" \
   --max_seq_length 512 \
   --per_device_train_batch_size 2 \
-  --gradient_accumulation_steps 4 \
+  --gradient_accumulation_steps 2 \
   --num_train_epochs 1.5 \
   --learning_rate 1e-6 \
   --gradient_checkpointing \

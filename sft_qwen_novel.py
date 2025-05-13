@@ -219,6 +219,13 @@ def parse_args():
         action="store_true",
         help="在划分训练/评估数据集前是否打乱数据",
     )
+
+    parser.add_argument(
+        "--deepspeed",
+        type=str,
+        default=None,
+        help="DeepSpeed 配置文件路径",
+    )
     args = parser.parse_args()
     return args 
 
@@ -590,6 +597,7 @@ def main():
         adam_beta1=0.8,
         adam_beta2=0.99,
         save_total_limit=3,
+        deepspeed=args.deepspeed,
     )
     
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
