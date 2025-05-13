@@ -9,10 +9,10 @@
   },
 
   "zero_optimization": {
-      "stage": 2,
-      "cpu_offload": true,
-      "contiguous_gradients": true,
-      "overlap_comm": true
+    "stage": 2,
+    "offload_optimizer": false,
+    "offload_param": false,
+    "overlap_comm": true
   },
 
   "zero_allow_untested_optimizer": true,
