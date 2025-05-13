@@ -1,6 +1,6 @@
    accelerate
    bert-score
-   bitsandbytes==0.44.1
+   bitsandbytes
    datasets==2.14.5
    deepspeed
    gradio==3.50.2
