@@ -6,8 +6,8 @@
 
 ### 1. 创建并激活conda环境
 ```bash
-conda create -n qwen_train_new python=3.10
-conda activate qwen_train_new
+conda create -n qwen_train python=3.10
+conda activate qwen_train
 conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 -c pytorch -c nvidia
 ```
 

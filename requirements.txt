@@ -19,4 +19,4 @@
    tqdm==4.65.0
    transformers==4.51.3
    wandb==0.15.11
-   modescope
+   modelscope
