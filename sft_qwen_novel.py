@@ -12,6 +12,7 @@ from transformers import (
     Trainer, 
     TrainingArguments,
     DataCollatorForLanguageModeling,
+    DataCollatorForSeq2Seq,
     set_seed
 )
 from transformers.trainer_utils import get_last_checkpoint
@@ -401,6 +402,8 @@ class SFTDataset(Dataset):
     def __getitem__(self, idx):
         text = self.examples[idx]["text"]
 
+        # 只需要对文本进行编码，不需要处理复杂的掩码逻辑
+        # DataCollatorForSeq2Seq将负责处理标签和掩码
         encoding = self.tokenizer(
                 text,
                 truncation=True,
@@ -409,54 +412,16 @@ class SFTDataset(Dataset):
                 return_tensors="pt",
             )
 
-        # 处理标签 - 对于SFT，我们将不需要对应于instruction的标记设置为-100
+        # 从编码结果中获取输入ID和注意力掩码
         input_ids = encoding["input_ids"].squeeze(0)
         attention_mask = encoding["attention_mask"].squeeze(0)
         
-        # 为标签创建副本
-        labels = input_ids.clone()
-        
-        # 尝试查找助手回复的开始位置
-        assistant_start_found = False
-        
-        # 1. 尝试使用多种token组合查找助手部分开始位置
-        possible_assistant_tokens = [
-            "<|im_start|>assistant", 
-            "assistant",
-            "<|assistant|>",
-            "<assistant>"
-        ]
-        
-        for token_text in possible_assistant_tokens:
-            # 将token文本编码为ID
-            try:
-                token_ids = self.tokenizer.encode(token_text, add_special_tokens=False)
-                if len(token_ids) == 0:
-                    continue
-                    
-                # 对于tokenizer返回多个ID的情况，我们查找第一个ID的位置
-                first_token_id = token_ids[0]
-                positions = (input_ids == first_token_id).nonzero(as_tuple=True)[0]
-                
-                if len(positions) > 0:
-                    # 找到了位置，使用最后一个匹配（通常模板有多个assistant标记时）
-                    assistant_pos = positions[-1]
-                    labels[:assistant_pos] = -100
-                    assistant_start_found = True
-                    break
-            except Exception as e:
-                continue
-        if not assistant_start_found:
-            # 如果仍然没有找到，则使用默认的分割点
-            split_ratio = 0.4
-            split_point = int(len(input_ids) * split_ratio)
-            labels[:split_point] = -100
-            logger.warning("未找到助手回复的开始位置，使用默认的分割点")
-            
+        # 简单地返回输入ID和注意力掩码
+        # DataCollatorForSeq2Seq会自动创建适当的标签
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "labels": labels
+            "labels": input_ids.clone()  # 提供完整的标签，让collator处理掩码
         }
 
 def split_dataset(dataset, eval_ratio=0.1, seed=42, shuffle=True):
@@ -855,10 +820,11 @@ def main():
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
     
     # 数据整理器
-    data_collator = DataCollatorForLanguageModeling(
+    data_collator = DataCollatorForSeq2Seq(
         tokenizer=tokenizer,
-        mlm=False,
+        model=model,  # 传入模型以利用其token知识
         pad_to_multiple_of=8,  # 确保填充到8的倍数以提高性能
+        label_pad_token_id=-100  # 使用-100作为填充标记ID，PyTorch损失函数会忽略这些标记
     )
     
     try:
