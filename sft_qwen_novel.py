@@ -801,8 +801,6 @@ def main():
         shuffle=args.shuffle_before_split
     )
     
-    logger.info(f"开始打印训练配置{is_main_process}")
-    print_training_config(args, model_config, train_dataset, eval_dataset, is_distributed)
     # 仅在主进程打印训练配置
     if is_main_process:
         print_training_config(args, model_config, train_dataset, eval_dataset, is_distributed)
