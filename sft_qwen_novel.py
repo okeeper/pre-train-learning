@@ -288,27 +288,16 @@ def parse_args():
         help="在划分训练/评估数据集前是否打乱数据",
     )
 
-    parser.add_argument(
-        "--auto_set_max_seq_length",
-        action="store_true",
-        default=False,
-        help="是否自动设置最大序列长度",
-    )
-
     args = parser.parse_args()
     return args 
 
 # 自定义数据集类，用于SFT微调
 class SFTDataset(Dataset):
-    def __init__(self, data_dir: str, tokenizer: AutoTokenizer, max_seq_length: int, file_pattern: str = "sft_data_*.json", template: str = DEFAULT_TEMPLATE, auto_set_max_seq_length: bool = False):
+    def __init__(self, data_dir: str, tokenizer: AutoTokenizer, max_seq_length: int, file_pattern: str = "sft_data_*.json", template: str = DEFAULT_TEMPLATE):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
         self.template = template
-        self.auto_set_max_seq_length = auto_set_max_seq_length
         self.examples = []
-        
-        # 打印参数，帮助调试
-        logger.info(f"SFTDataset初始化: max_seq_length={max_seq_length}, auto_set_max_seq_length={auto_set_max_seq_length}")
         
         # 处理逗号分隔的模式
         patterns = [p.strip() for p in file_pattern.split(',')]
@@ -411,21 +400,11 @@ class SFTDataset(Dataset):
 
     def __getitem__(self, idx):
         text = self.examples[idx]["text"]
-        
-        # 始终使用max_seq_length来限制长度，除非明确要求自动设置长度
-        if self.auto_set_max_seq_length:
-            encoding = self.tokenizer(
+
+        encoding = self.tokenizer(
                 text,
                 truncation=True,
-                return_tensors="pt",
-            )
-        else:
-            # 确保max_seq_length不为None
-            seq_len = self.max_seq_length if self.max_seq_length is not None else 2048
-            encoding = self.tokenizer(
-                text,
-                truncation=True,
-                max_length=seq_len,
+                max_length=self.max_seq_length,
                 padding="max_length",
                 return_tensors="pt",
             )
@@ -789,8 +768,7 @@ def main():
         tokenizer=tokenizer,
         max_seq_length=args.max_seq_length,
         file_pattern=args.file_pattern,
-        template=args.template,
-        auto_set_max_seq_length=args.auto_set_max_seq_length
+        template=args.template
     )
     
     # 分割数据集
