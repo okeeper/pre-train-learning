@@ -25,6 +25,7 @@ import time
 import sys
 from torch.distributed import gather_object
 import signal
+import tqdm
 
 # 设置可见的GPU 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
