@@ -3,39 +3,31 @@ import json
 import glob
 from typing import List, Dict, Any, Optional
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import transformers
 from transformers import (
     AutoModelForCausalLM,
     AutoConfig,
     AutoTokenizer,
-    Trainer, 
+    Trainer,
     TrainingArguments,
     DataCollatorForSeq2Seq,
     set_seed
 )
-from transformers.trainer_utils import get_last_checkpoint
 import logging
 import argparse
-from datasets import load_dataset
 import wandb
 from datetime import datetime
 from transformers.trainer_callback import TrainerCallback
-import time
 import sys
-from torch.distributed import gather_object
 import signal
-import tqdm
+import tqdm  # 修复：添加 tqdm 导入
 
-# 设置可见的GPU 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
-# 设置环境变量跳过DeepSpeed的CUDA版本检查
+# 设置环境变量
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"  # 根据你的日志，检测到2个GPU
 os.environ["DS_SKIP_CUDA_CHECK"] = "1"
-# 解决tokenizers警告
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-# 内存优化设置
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:128"
-# 内存碎片化处理
 os.environ["MALLOC_CONF"] = "background_thread:true,metadata_thp:auto,dirty_decay_ms:30000,muzzy_decay_ms:30000"
 
 # 设置日志
@@ -75,7 +67,7 @@ def parse_args():
     parser.add_argument(
         "--model_name_or_path",
         type=str,
-        default="Qwen/Qwen2.5-1.5B-Instruct",
+        default="/data/hf-models/Qwen3-8B",
         help="要微调的Qwen模型路径或名称",
     )
     parser.add_argument(
@@ -87,17 +79,17 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="output",
+        default="output/sft/xd_sft",
         help="保存模型和日志的输出目录",
     )
     parser.add_argument(
         "--per_device_train_batch_size",
         type=int,
-        default=1,
+        default=2,
         help="每个GPU的训练批次大小",
     )
     parser.add_argument(
-        "--per_device_eval_batch_size", 
+        "--per_device_eval_batch_size",
         type=int,
         default=1,
         help="每个GPU的评估批次大小",
@@ -105,13 +97,13 @@ def parse_args():
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
-        default=8,
+        default=4,
         help="梯度累积步数",
     )
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-4,  # 提高学习率以确保梯度更新
+        default=1e-4,  # 提高到1e-4，避免梯度过小
         help="初始学习率",
     )
     parser.add_argument(
@@ -123,7 +115,7 @@ def parse_args():
     parser.add_argument(
         "--num_train_epochs",
         type=float,
-        default=3.0,
+        default=1.5,
         help="训练轮次数",
     )
     parser.add_argument(
@@ -135,7 +127,7 @@ def parse_args():
     parser.add_argument(
         "--logging_steps",
         type=int,
-        default=10,
+        default=1,
         help="日志记录步数",
     )
     parser.add_argument(
@@ -153,7 +145,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=2048,
+        default=512,
         help="最大序列长度",
     )
     parser.add_argument(
@@ -165,7 +157,7 @@ def parse_args():
     parser.add_argument(
         "--fp16",
         action="store_true",
-        default=False,  # 禁用FP16以避免数值不稳定
+        default=False,  # 禁用FP16以确保稳定性
         help="是否使用混合精度训练",
     )
     parser.add_argument(
@@ -176,7 +168,7 @@ def parse_args():
     )
     parser.add_argument(
         "--gradient_checkpointing",
-        action="store_true", 
+        action="store_true",
         help="启用梯度检查点以节省内存",
     )
     parser.add_argument(
@@ -193,7 +185,7 @@ def parse_args():
     parser.add_argument(
         "--wandb_name",
         type=str,
-        default=None,
+        default="xd_sft",
         help="Weights & Biases运行名称",
     )
     parser.add_argument(
@@ -206,21 +198,15 @@ def parse_args():
     parser.add_argument(
         "--optim",
         type=str,
-        default="adamw_8bit",  # 使用8位优化器以提高稳定性
-        choices=["adamw_8bit", "adamw_torch", "adamw_torch_fp16"],
+        default="adamw_torch",  # 使用adamw_torch以兼容旧版transformers
+        choices=["adamw_torch", "adamw_8bit"],
         help="优化器类型",
     )
     parser.add_argument(
         "--local_rank",
         type=int,
-        default=-1,  # 禁用分布式训练以简化调试
+        default=-1,
         help="分布式训练的本地排名",
-    )
-    parser.add_argument(
-        "--deepspeed",
-        type=str,
-        default=None,  # 禁用DeepSpeed
-        help="DeepSpeed配置文件路径",
     )
     parser.add_argument(
         "--eval_split_ratio",
@@ -238,7 +224,7 @@ def parse_args():
 
 # 自定义数据集类
 class SFTDataset(Dataset):
-    def __init__(self, data_dir: str, tokenizer: AutoTokenizer, max_seq_length: int, file_pattern: str = "sft_data_*.json"):
+    def __init__(self, data_dir: str, tokenizer: AutoTokenizer, max_seq_length: int, file_pattern: str):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
         self.examples = []
@@ -247,8 +233,8 @@ class SFTDataset(Dataset):
         json_files = []
         
         for pattern in patterns:
-            if os.path.isfile(pattern):
-                json_files.append(pattern)
+            if os.path.isfile(os.path.join(data_dir, pattern)):
+                json_files.append(os.path.join(data_dir, pattern))
             else:
                 matched_files = glob.glob(os.path.join(data_dir, pattern))
                 json_files.extend(matched_files)
@@ -260,8 +246,7 @@ class SFTDataset(Dataset):
         for json_file in json_files:
             try:
                 if json_file.endswith('.jsonl'):
-                    if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
-                        logger.info(f"加载JSONL文件: {json_file}")
+                    logger.info(f"加载JSONL文件: {json_file}")
                     with open(json_file, 'r', encoding='utf-8') as f:
                         for line in f:
                             try:
@@ -270,8 +255,7 @@ class SFTDataset(Dataset):
                             except json.JSONDecodeError as je:
                                 logger.warning(f"解析JSONL行时出错: {str(je)}")
                 else:
-                    if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
-                        logger.info(f"加载JSON文件: {json_file}")
+                    logger.info(f"加载JSON文件: {json_file}")
                     with open(json_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                         if isinstance(data, list):
@@ -284,8 +268,7 @@ class SFTDataset(Dataset):
             except Exception as e:
                 logger.error(f"处理文件{json_file}时出错: {str(e)}")
         
-        if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
-            logger.info(f"总共加载了{len(self.examples)}个SFT样本")
+        logger.info(f"总共加载了{len(self.examples)}个SFT样本")
 
     def _process_item(self, item):
         if isinstance(item, dict):
@@ -312,7 +295,6 @@ class SFTDataset(Dataset):
                 response = item["completion"]
             
             if instruction and response:
-                # 使用模型的内置聊天模板
                 messages = [
                     {"role": "system", "content": "You are a helpful AI assistant."},
                     {"role": "user", "content": instruction},
@@ -320,7 +302,7 @@ class SFTDataset(Dataset):
                 ]
                 formatted_text = self.tokenizer.apply_chat_template(messages, tokenize=False)
                 
-                if len(self.examples) < 5 and (not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0):
+                if len(self.examples) < 5:
                     logger.info(f"Formatted text sample: {formatted_text[:100]}...")
                 
                 self.examples.append({"text": formatted_text})
@@ -331,7 +313,7 @@ class SFTDataset(Dataset):
     def __getitem__(self, idx):
         text = self.examples[idx]["text"]
 
-        if idx < 5 and (not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0):
+        if idx < 5:
             logger.info(f"Sample {idx} text: {text[:100]}...")
 
         encoding = self.tokenizer(
@@ -345,7 +327,7 @@ class SFTDataset(Dataset):
         input_ids = encoding["input_ids"].squeeze(0)
         attention_mask = encoding["attention_mask"].squeeze(0)
 
-        if idx < 5 and (not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0):
+        if idx < 5:
             logger.info(f"Sample {idx} input_ids: {input_ids[:20]}...")
             logger.info(f"Sample {idx} attention_mask: {attention_mask[:20]}...")
 
@@ -378,14 +360,23 @@ class CustomDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
         labels_batch = labels_batch.masked_fill(labels_batch == self.tokenizer.pad_token_id, -100)
 
-        is_main_process = args.local_rank == -1 or args.local_rank == 0
-        if is_main_process:
-            logger.info(f"Batch input_ids shape: {batch['input_ids'].shape}")
-            logger.info(f"Batch labels shape: {batch['labels'].shape}")
-            logger.info(f"Sample labels: {batch['labels'][0][:20]}...")
+        logger.info(f"Batch input_ids shape: {batch['input_ids'].shape}")
+        logger.info(f"Batch labels shape: {batch['labels'].shape}")
+        logger.info(f"Sample labels: {batch['labels'][0][:20]}...")
 
         batch["labels"] = labels_batch
         return batch
+
+# 自定义 Trainer 以支持梯度裁剪
+class CustomTrainer(Trainer):
+    def training_step(self, model, inputs):
+        # 执行正常训练步骤
+        loss = super().training_step(model, inputs)
+        
+        # 手动裁剪梯度
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        return loss
 
 def split_dataset(dataset, eval_ratio=0.1, seed=42, shuffle=True):
     if eval_ratio <= 0 or eval_ratio >= 1:
@@ -510,15 +501,12 @@ def print_training_config(args, model_config, train_dataset, eval_dataset, is_di
 class GradientLoggingCallback(TrainerCallback):
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if state.global_step % args.logging_steps == 0:
-            is_main_process = args.local_rank == -1 or args.local_rank == 0
             for name, param in model.named_parameters():
                 if param.grad is not None:
                     grad_norm = param.grad.norm().item()
-                    if is_main_process:
-                        logger.info(f"Gradient norm for {name}: {grad_norm}")
+                    logger.info(f"Gradient norm for {name}: {grad_norm}")
                 else:
-                    if is_main_process:
-                        logger.info(f"No gradient for {name}")
+                    logger.info(f"No gradient for {name}")
 
 def main():
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
@@ -535,8 +523,8 @@ def main():
     if is_main_process:
         os.makedirs(args.output_dir, exist_ok=True)
         run_time_str = datetime.now().strftime('%Y%m%d-%H%M%S')
-        wandb_run_name = f"qwen-sft-{run_time_str}"
-        args.wandb_name = args.wandb_name or wandb_run_name
+        wandb_run_name = f"qwen-sft-{run_time_str}" if not args.wandb_name else args.wandb_name
+        args.wandb_name = wandb_run_name
     
     if is_main_process and args.use_wandb:
         import wandb
@@ -564,9 +552,9 @@ def main():
     
     logger.info(f"加载预训练模型: {args.model_name_or_path}")
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_name_or_path, 
+        args.model_name_or_path,
         config=model_config,
-        torch_dtype=torch.float32,  # 使用float32以确保稳定性
+        torch_dtype=torch.float32,
     )
     
     if args.gradient_checkpointing:
@@ -581,7 +569,7 @@ def main():
     )
     
     train_dataset, eval_dataset = split_dataset(
-        full_dataset, 
+        full_dataset,
         eval_ratio=args.eval_split_ratio,
         seed=args.seed,
         shuffle=args.shuffle_before_split
@@ -604,16 +592,14 @@ def main():
         save_steps=args.save_steps,
         eval_steps=args.eval_steps if eval_dataset else None,
         fp16=args.fp16,
-        gradient_clipping=1.0,  # 添加梯度裁剪
         remove_unused_columns=False,
-        report_to=["wandb"] if args.use_wandb and is_main_process else [],
+        report_to=[" WandB"] if args.use_wandb and is_main_process else [],
         run_name=wandb.run.name if args.use_wandb and is_main_process else None,
         disable_tqdm=not is_main_process,
         local_rank=args.local_rank,
         dataloader_num_workers=4,
         dataloader_pin_memory=True,
         optim=args.optim,
-        deepspeed=args.deepspeed,
         adam_beta1=0.8,
         adam_beta2=0.99,
         save_total_limit=3,
@@ -631,7 +617,7 @@ def main():
     )
     
     try:
-        trainer = Trainer(
+        trainer = CustomTrainer(  # 使用自定义Trainer支持梯度裁剪
             model=model,
             args=training_args,
             data_collator=data_collator,
@@ -659,7 +645,7 @@ def main():
         trainer.save_model(args.output_dir)
         tokenizer.save_pretrained(args.output_dir)
         
-        if training_args.local_rank == 0:
+        if training_args.local_rank == -1:
             with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
                 json.dump(vars(args), f, indent=4)
         
@@ -671,7 +657,7 @@ def main():
     logger.info("SFT微调完成!")
 
 if __name__ == "__main__":
-    try:    
+    try:
         main()
     except Exception as e:
         logger.error(f"发生异常: {str(e)}")

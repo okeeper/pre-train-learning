@@ -93,7 +93,7 @@ python test_chat.py --model_path output/output/qwen_novel_pretrain_long \
 python test_chat.py --model_path output/qwen_novel_pretrain_short \
 --max_new_tokens 512 --temperature 0.7
 
-python test_chat.py --model_path output/qwen_novel_pretrain_knowledge \
+python test_chat.py --model_path output/sft/xd_sft \
 --max_new_tokens 512 --temperature 0.7
 
 
