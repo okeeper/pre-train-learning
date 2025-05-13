@@ -6,6 +6,21 @@
     "enabled": "auto"
   },
   "zero_optimization": {
-    "stage": 2
-  }
+    "stage": 2,
+    "offload_optimizer": {
+      "device": "none"
+    },
+    "offload_param": {
+      "device": "none"
+    },
+    "allgather_partitions": true,
+    "allgather_bucket_size": 5e8,
+    "reduce_scatter": true,
+    "reduce_bucket_size": 5e8
+  },
+  "communication": {
+    "allreduce_fp16": true,
+    "overlap_comm": true
+  },
+  "verbose": true
 }

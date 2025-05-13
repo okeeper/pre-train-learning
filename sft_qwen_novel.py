@@ -499,9 +499,7 @@ def main():
     args = parse_args()
     set_seed(args.seed)
     
-    # 初始化DeepSpeed分布式环境
-    deepspeed.init_distributed() if args.deepspeed else None
-    
+
     is_main_process = not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
     is_distributed = args.deepspeed or torch.distributed.is_initialized()
     
