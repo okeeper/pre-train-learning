@@ -285,10 +285,10 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --wandb_name qwen3_novel_full_pretrain \
   --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
   --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 2 \
+  --gradient_accumulation_steps 1 \
   --max_seq_length 4096 \
   --num_train_epochs 1.5 \
-  --learning_rate 2e-5 \
+  --learning_rate 1e-6 \
   --fp16 \
   --logging_steps 1 \
   --use_wandb \

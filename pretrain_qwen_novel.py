@@ -28,10 +28,10 @@ import signal
 # 导入PEFT/LoRA相关库
 from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_training
 
-# 强制刷新所有标准输出
-os.environ["PYTHONUNBUFFERED"] = "1"
 # 解决tokenizers警告
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# 内存优化设置
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:128"
 
 # 设置日志
 logging.basicConfig(
