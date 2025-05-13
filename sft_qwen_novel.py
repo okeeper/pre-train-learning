@@ -18,13 +18,13 @@ import logging
 import argparse
 import wandb
 from datetime import datetime
-from transformers.trainer_callback import TrainerCallback
 import sys
 import signal
-import tqdm  # 修复：添加 tqdm 导入
+import tqdm
+import deepspeed  # 修复：添加 deepspeed 导入
 
 # 设置环境变量
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"  # 根据你的日志，检测到2个GPU
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 os.environ["DS_SKIP_CUDA_CHECK"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:128"
@@ -103,7 +103,7 @@ def parse_args():
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-4,  # 提高到1e-4，避免梯度过小
+        default=1e-4,
         help="初始学习率",
     )
     parser.add_argument(
@@ -157,7 +157,7 @@ def parse_args():
     parser.add_argument(
         "--fp16",
         action="store_true",
-        default=False,  # 禁用FP16以确保稳定性
+        default=True,  # 启用FP16以优化DeepSpeed性能
         help="是否使用混合精度训练",
     )
     parser.add_argument(
@@ -198,7 +198,7 @@ def parse_args():
     parser.add_argument(
         "--optim",
         type=str,
-        default="adamw_torch",  # 使用adamw_torch以兼容旧版transformers
+        default="adamw_torch",
         choices=["adamw_torch", "adamw_8bit"],
         help="优化器类型",
     )
@@ -219,11 +219,10 @@ def parse_args():
         action="store_true",
         help="在划分训练/评估数据集前是否打乱数据",
     )
-
     parser.add_argument(
         "--deepspeed",
         type=str,
-        default=None,
+        default="ds_config.json",
         help="DeepSpeed 配置文件路径",
     )
     args = parser.parse_args()
@@ -371,7 +370,6 @@ class CustomDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         
         return batch
 
-
 def split_dataset(dataset, eval_ratio=0.1, seed=42, shuffle=True):
     if eval_ratio <= 0 or eval_ratio >= 1:
         return dataset, None
@@ -455,6 +453,7 @@ def print_training_config(args, model_config, train_dataset, eval_dataset, is_di
     logger.info("\n加速技术:")
     logger.info(f"\tFP16混合精度:\t{'启用' if args.fp16 else '禁用'}")
     logger.info(f"\t梯度检查点:\t{'启用' if args.gradient_checkpointing else '禁用'}")
+    logger.info(f"\tDeepSpeed:\t{'启用' if args.deepspeed else '禁用'}")
     logger.info("\n保存与监控:")
     logger.info(f"\t输出目录:\t{args.output_dir}")
     logger.info(f"\t日志步数:\t{args.logging_steps}")
@@ -491,7 +490,6 @@ def print_training_config(args, model_config, train_dataset, eval_dataset, is_di
     logger.info(separator)
     logger.info("\n")
 
-
 def main():
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     
@@ -501,8 +499,10 @@ def main():
     args = parse_args()
     set_seed(args.seed)
     
-    is_distributed = False
-    is_main_process = True
+    # 初始化DeepSpeed分布式环境
+    deepspeed.init_distributed() if args.deepspeed else None
+    is_main_process = not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
+    is_distributed = args.deepspeed or torch.distributed.is_initialized()
     
     if is_main_process:
         os.makedirs(args.output_dir, exist_ok=True)
@@ -511,7 +511,6 @@ def main():
         args.wandb_name = wandb_run_name
     
     if is_main_process and args.use_wandb:
-        import wandb
         wandb.init(
             project=args.wandb_project,
             name=args.wandb_name,
@@ -538,11 +537,15 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path,
         config=model_config,
-        torch_dtype=torch.float32,
+        torch_dtype=torch.float16 if args.fp16 else torch.float32,
     )
     
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
+    
+    # DeepSpeed引擎初始化
+    if args.deepspeed:
+        model = deepspeed.initialize(model=model, config_params=args.deepspeed)[0]
     
     logger.info(f"加载SFT训练数据: {args.data_dir}")
     full_dataset = SFTDataset(
@@ -630,9 +633,8 @@ def main():
         trainer.save_model(args.output_dir)
         tokenizer.save_pretrained(args.output_dir)
         
-        if training_args.local_rank == -1:
-            with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
-                json.dump(vars(args), f, indent=4)
+        with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
+            json.dump(vars(args), f, indent=4)
         
         logger.info(f"保存最终模型成功: {args.output_dir}")
         if args.use_wandb:
