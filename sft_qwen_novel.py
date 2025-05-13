@@ -572,8 +572,9 @@ def main():
         save_steps=args.save_steps,
         eval_steps=args.eval_steps if eval_dataset else None,
         fp16=args.fp16,
+        max_grad_norm=1.0,
         remove_unused_columns=False,
-        report_to=[" WandB"] if args.use_wandb and is_main_process else [],
+        report_to=["wandb"] if args.use_wandb and is_main_process else [],
         run_name=wandb.run.name if args.use_wandb and is_main_process else None,
         disable_tqdm=not is_main_process,
         local_rank=args.local_rank,
@@ -597,7 +598,7 @@ def main():
     )
     
     try:
-        trainer = Trainer(  # 使用自定义Trainer支持梯度裁剪
+        trainer = Trainer(
             model=model,
             args=training_args,
             data_collator=data_collator,
