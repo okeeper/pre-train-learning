@@ -7,8 +7,9 @@ deepspeed --num_gpus=2 sft_qwen_novel.py \
   --wandb_name xd_sft \
   --file_pattern "sft/xd_final_sft.json,sft/alpaca_zh_demo.json" \
   --auto_set_max_seq_length \
+  --max_seq_length 2048 \
   --per_device_train_batch_size 4 \
-  --gradient_accumulation_steps 8 \
+  --gradient_accumulation_steps 4 \
   --num_train_epochs 1.5 \
   --learning_rate 1e-6 \
   --fp16 \
