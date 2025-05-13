@@ -279,13 +279,13 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128"
 
 #   --gradient_checkpointing \
 nohup \
-deepspeed --num_gpus=2 pretrain_qwen_novel.py \
+CUDA_VISIBLE_DEVICES=0,1,2,3 deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
   --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
   --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 1 \
+  --gradient_accumulation_steps 4 \
   --max_seq_length 4096 \
   --num_train_epochs 1.5 \
   --learning_rate 1e-6 \
