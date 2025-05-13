@@ -277,6 +277,9 @@ python pretrain_qwen_novel.py \
 # 启用内存优化环境变量
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128"
 
+# 设置环境变量跳过DeepSpeed的CUDA版本检查
+export DS_SKIP_CUDA_CHECK=1
+
 #   --gradient_checkpointing \
 nohup \
 CUDA_VISIBLE_DEVICES=0,1,2,3 deepspeed --num_gpus=2 pretrain_qwen_novel.py \

@@ -1,45 +1,25 @@
 {
+  "train_batch_size": "auto",
   "fp16": {
-      "enabled": "auto",
-      "loss_scale": 0,
-      "loss_scale_window": 1000,
-      "initial_scale_power": 16,
-      "hysteresis": 2,
-      "min_loss_scale": 1
+    "enabled": true
   },
-
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": "auto",
+      "betas": [0.9, 0.999],
+      "eps": 1e-8,
+      "weight_decay": 0.0
+    }
+  },
   "zero_optimization": {
     "stage": 2,
     "offload_optimizer": false,
     "offload_param": false,
-    "overlap_comm": true
+    "overlap_comm": true,
+    "contiguous_gradients": true
   },
-
-  "zero_allow_untested_optimizer": true,
-
   "gradient_accumulation_steps": "auto",
-  "gradient_clipping": "auto",
-  "steps_per_print": 1,
-  "train_batch_size": "auto",
-  "train_micro_batch_size_per_gpu": "auto",
-  "wall_clock_breakdown": false,
-
-  "communication_options": {
-    "port": 30518,
-    "rendezvous_port": 30538
-  },
-  
-  "data_efficiency": {
-    "data_parallel_random_init": true
-  },
-
-  "activation_checkpointing": {
-    "partition_activations": true,
-    "contiguous_memory_optimization": true
-  },
-
-  "offload_optimizer": {
-    "device": "cpu",
-    "pin_memory": true
-  }
+  "gradient_clipping": 1.0,
+  "steps_per_print": 1
 }
