@@ -367,16 +367,7 @@ class CustomDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
         labels_batch = labels_batch.masked_fill(labels_batch == self.tokenizer.pad_token_id, -100)
 
-        logger.info(f"Batch input_ids shape: {batch['input_ids'].shape}")
-        # 在设置labels之前不要访问batch['labels']
-        # logger.info(f"Batch labels shape: {batch['labels'].shape}")
-        # logger.info(f"Sample labels: {batch['labels'][0][:20]}...")
-
         batch["labels"] = labels_batch
-        
-        # 添加以下行，在设置labels后记录日志
-        logger.info(f"Batch labels shape: {batch['labels'].shape}")
-        logger.info(f"Sample labels: {batch['labels'][0][:20]}...")
         
         return batch
 
