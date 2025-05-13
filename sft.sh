@@ -1,6 +1,7 @@
 
 # 直接sft
-CUDA_VISIBLE_DEVICES=0,1,2,3 deepspeed --num_gpus=4 sft_training.py \
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
+deepspeed --num_gpus=2 sft_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/sft/xd_sft \
   --wandb_name xd_sft \

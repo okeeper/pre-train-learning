@@ -11,7 +11,7 @@ from transformers import (
     AutoTokenizer,
     Trainer, 
     TrainingArguments,
-    DataCollatorForSeq2SeqLanguageModeling,
+    DataCollatorForLanguageModeling,
     set_seed
 )
 from transformers.trainer_utils import get_last_checkpoint
@@ -836,10 +836,9 @@ def main():
     logger.info(f"训练参数: logging_steps={training_args.logging_steps}, save_steps={training_args.save_steps}")
     
     # 数据整理器
-    data_collator = DataCollatorForSeq2SeqLanguageModeling(
+    data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm=False,
-        return_tensors="pt",
         pad_to_multiple_of=8,  # 确保填充到8的倍数以提高性能
     )
     
