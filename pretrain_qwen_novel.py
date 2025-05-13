@@ -28,6 +28,10 @@ import signal
 # 导入PEFT/LoRA相关库
 from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_training
 
+# 设置可见的GPU 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+# 设置环境变量跳过DeepSpeed的CUDA版本检查
+os.environ["DS_SKIP_CUDA_CHECK"] = "1"
 # 解决tokenizers警告
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # 内存优化设置
@@ -140,7 +144,6 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=1024,
         help="最大序列长度",
     )
     parser.add_argument(
@@ -334,13 +337,20 @@ class NovelChunksDataset(Dataset):
     def __getitem__(self, idx):
         # 按需进行tokenize处理，而不是预先处理所有数据
         text = self.examples[idx]
-        encoding = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_seq_length,
-            padding="max_length",
-            return_tensors="pt",
-        )
+        if self.max_seq_length:
+            encoding = self.tokenizer(
+                text,
+                truncation=True,
+                max_length=self.max_seq_length,
+                padding="max_length",
+                return_tensors="pt",
+            )
+        else:
+            encoding = self.tokenizer(
+                text,
+                add_special_tokens=True,
+                return_tensors="pt",
+            )
         
         # 移除批处理维度
         item = {
@@ -694,7 +704,8 @@ def main():
     # 数据整理器
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
-        mlm=False,
+        mlm=False,  # 不使用掩码语言建模
+        pad_to_multiple_of=8,  # 确保填充到8的倍数以提高性能
     )
     
     # 初始化Trainer

@@ -1,0 +1,16 @@
+
+# 直接sft
+CUDA_VISIBLE_DEVICES=0,1,2,3 deepspeed --num_gpus=4 sft_training.py \
+  --model_name_or_path /data/hf-models/Qwen3-8B \
+  --output_dir output/sft/xd_sft \
+  --wandb_name xd_sft \
+  --file_pattern "data/sft/xd_final_sft.json,data/sft/alpaca_zh.json" \
+  --per_device_train_batch_size 4 \
+  --gradient_accumulation_steps 8 \
+  --num_train_epochs 1.5 \
+  --learning_rate 1e-6 \
+  --fp16 \
+  --gradient_checkpointing \
+  --logging_steps 1 \
+  --use_wandb \
+  --deepspeed ds_config.json

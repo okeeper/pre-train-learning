@@ -282,7 +282,7 @@ export DS_SKIP_CUDA_CHECK=1
 
 #   --gradient_checkpointing \
 nohup \
-CUDA_VISIBLE_DEVICES=0,1,2,3 deepspeed --num_gpus=2 pretrain_qwen_novel.py \
+CUDA_VISIBLE_DEVICES=0,1,2,3 deepspeed --num_gpus=4 pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
@@ -293,6 +293,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --num_train_epochs 1.5 \
   --learning_rate 1e-6 \
   --fp16 \
+  --gradient_checkpointing \
   --logging_steps 1 \
   --use_wandb \
   --deepspeed ds_config.json \
