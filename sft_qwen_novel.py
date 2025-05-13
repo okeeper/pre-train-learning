@@ -545,7 +545,9 @@ def main():
     
     # DeepSpeed引擎初始化
     if args.deepspeed:
-        model = deepspeed.initialize(model=model, config_params=args.deepspeed)[0]
+        with open(args.deepspeed, 'r') as f:
+            ds_config = json.load(f)
+        model, _, _, _ = deepspeed.initialize(model=model, config_params=ds_config)
     
     logger.info(f"加载SFT训练数据: {args.data_dir}")
     full_dataset = SFTDataset(
@@ -564,7 +566,7 @@ def main():
     
     if is_main_process:
         print_training_config(args, model_config, train_dataset, eval_dataset, is_distributed)
-
+    
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True,
