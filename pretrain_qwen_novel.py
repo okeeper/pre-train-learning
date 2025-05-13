@@ -144,6 +144,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
+        default=1024,
         help="最大序列长度",
     )
     parser.add_argument(
@@ -337,20 +338,13 @@ class NovelChunksDataset(Dataset):
     def __getitem__(self, idx):
         # 按需进行tokenize处理，而不是预先处理所有数据
         text = self.examples[idx]
-        if self.max_seq_length:
-            encoding = self.tokenizer(
-                text,
-                truncation=True,
-                max_length=self.max_seq_length,
-                padding="max_length",
-                return_tensors="pt",
-            )
-        else:
-            encoding = self.tokenizer(
-                text,
-                add_special_tokens=True,
-                return_tensors="pt",
-            )
+        encoding = self.tokenizer(
+            text,
+            truncation=True,
+            max_length=self.max_seq_length,
+            padding="max_length",
+            return_tensors="pt",
+        )
         
         # 移除批处理维度
         item = {
@@ -704,8 +698,7 @@ def main():
     # 数据整理器
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
-        mlm=False,  # 不使用掩码语言建模
-        pad_to_multiple_of=8,  # 确保填充到8的倍数以提高性能
+        mlm=False,
     )
     
     # 初始化Trainer

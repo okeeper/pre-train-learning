@@ -181,7 +181,7 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --deepspeed ds_config.json
 
 
-# 使用LoRA训练Qwen3-8B模型 - 更高效内存使用版本
+# 预训练
 deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/qwen3_novel_full_pretrain \
