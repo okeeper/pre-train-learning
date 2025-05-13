@@ -46,5 +46,10 @@
   "activation_checkpointing": {
     "partition_activations": true,
     "contiguous_memory_optimization": true
+  },
+
+  "offload_optimizer": {
+    "device": "cpu",
+    "pin_memory": true
   }
 }
