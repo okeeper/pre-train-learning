@@ -164,6 +164,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
+        default=2048,
         help="最大序列长度",
     )
     parser.add_argument(
@@ -287,6 +288,13 @@ def parse_args():
         help="在划分训练/评估数据集前是否打乱数据",
     )
 
+    parser.add_argument(
+        "--auto_set_max_seq_length",
+        action="store_true",
+        default=False,
+        help="是否自动设置最大序列长度",
+    )
+
     args = parser.parse_args()
     return args 
 
@@ -400,18 +408,18 @@ class SFTDataset(Dataset):
     def __getitem__(self, idx):
         text = self.examples[idx]["text"]
         
-        if self.max_seq_length:
-            encoding = self.tokenizer(
+        if self.auto_set_max_seq_length:
+             encoding = self.tokenizer(
+                text,
+                truncation=True,
+                return_tensors="pt",
+            )
+        else:
+           encoding = self.tokenizer(
                 text,
                 truncation=True,
                 max_length=self.max_seq_length,
                 padding="max_length",
-                return_tensors="pt",
-            )
-        else:
-            encoding = self.tokenizer(
-                text,
-                truncation=True,
                 return_tensors="pt",
             )
 
@@ -609,9 +617,7 @@ def print_training_config(args, model_config, train_dataset, eval_dataset, is_di
         logger.info(f"\tLoRA目标模块:\t{args.lora_target_modules}")
     
     # 预计的训练时间
-    # 检查max_seq_length是否为None
-    max_seq_length = args.max_seq_length or 2048  # 默认值如果为None
-    tokens_per_step = effective_batch_size * max_seq_length
+    tokens_per_step = effective_batch_size * args.max_seq_length
     
     if args.max_steps > 0:
         total_steps = args.max_steps
