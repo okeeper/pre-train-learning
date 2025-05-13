@@ -300,11 +300,15 @@ def parse_args():
 
 # 自定义数据集类，用于SFT微调
 class SFTDataset(Dataset):
-    def __init__(self, data_dir: str, tokenizer: AutoTokenizer, max_seq_length: int, file_pattern: str = "sft_data_*.json", template: str = DEFAULT_TEMPLATE):
+    def __init__(self, data_dir: str, tokenizer: AutoTokenizer, max_seq_length: int, file_pattern: str = "sft_data_*.json", template: str = DEFAULT_TEMPLATE, auto_set_max_seq_length: bool = False):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
         self.template = template
+        self.auto_set_max_seq_length = auto_set_max_seq_length
         self.examples = []
+        
+        # 打印参数，帮助调试
+        logger.info(f"SFTDataset初始化: max_seq_length={max_seq_length}, auto_set_max_seq_length={auto_set_max_seq_length}")
         
         # 处理逗号分隔的模式
         patterns = [p.strip() for p in file_pattern.split(',')]
@@ -408,17 +412,20 @@ class SFTDataset(Dataset):
     def __getitem__(self, idx):
         text = self.examples[idx]["text"]
         
+        # 始终使用max_seq_length来限制长度，除非明确要求自动设置长度
         if self.auto_set_max_seq_length:
-             encoding = self.tokenizer(
+            encoding = self.tokenizer(
                 text,
                 truncation=True,
                 return_tensors="pt",
             )
         else:
-           encoding = self.tokenizer(
+            # 确保max_seq_length不为None
+            seq_len = self.max_seq_length if self.max_seq_length is not None else 2048
+            encoding = self.tokenizer(
                 text,
                 truncation=True,
-                max_length=self.max_seq_length,
+                max_length=seq_len,
                 padding="max_length",
                 return_tensors="pt",
             )
@@ -782,7 +789,8 @@ def main():
         tokenizer=tokenizer,
         max_seq_length=args.max_seq_length,
         file_pattern=args.file_pattern,
-        template=args.template
+        template=args.template,
+        auto_set_max_seq_length=args.auto_set_max_seq_length
     )
     
     # 分割数据集
@@ -848,29 +856,33 @@ def main():
         pad_to_multiple_of=8,  # 确保填充到8的倍数以提高性能
     )
     
-    # 初始化Trainer
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        data_collator=data_collator,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
-    )
-    
-    # 监控模型(仅主进程)
-    if args.use_wandb and args.wandb_watch != "False" and is_main_process:
-        wandb.watch(model, log=args.wandb_watch, log_freq=args.logging_steps)
-    
-    # 开始训练
-    logger.info("开始SFT微调...")
-    
-    train_result = trainer.train()
-    
-    # 输出训练结果
-    if is_main_process:
-        logger.info(f"训练结果: {train_result}")
-        metrics = train_result.metrics
-        logger.info(f"训练指标: {metrics}")
+    try:
+        # 初始化Trainer
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            data_collator=data_collator,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+        )
+        
+        # 监控模型(仅主进程)
+        if args.use_wandb and args.wandb_watch != "False" and is_main_process:
+            wandb.watch(model, log=args.wandb_watch, log_freq=args.logging_steps)
+        
+        # 开始训练
+        logger.info("开始SFT微调...")
+        
+        train_result = trainer.train()
+        
+        # 输出训练结果
+        if is_main_process:
+            logger.info(f"训练结果: {train_result}")
+            metrics = train_result.metrics
+            logger.info(f"训练指标: {metrics}")
+    except Exception as e:
+        logger.error(f"训练过程中发生错误: {str(e)}")
+        raise  # 重新抛出异常以便上层处理
     
     # 保存模型(仅主进程)
     if is_main_process:
