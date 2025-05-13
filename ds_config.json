@@ -4,11 +4,6 @@
     "enabled": true
   },
   "zero_optimization": {
-    "stage": 2,
-    "offload_optimizer": false,
-    "offload_param": false,
-    "overlap_comm": true,
-    "contiguous_gradients": true
-  },
-  "gradient_accumulation_steps": "auto"
+    "stage": 2
+  }
 }
