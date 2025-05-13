@@ -550,7 +550,7 @@ def print_training_config(args, model_config, train_dataset, eval_dataset, is_di
     logger.info(f"\t训练样本数:\t{len(train_dataset):,} 个样本")
     if eval_dataset:
         logger.info(f"\t评估样本数:\t{len(eval_dataset):,} 个样本")
-    logger.info(f"\t最大序列长度:\t{args.max_seq_length}")
+    logger.info(f"\t最大序列长度:\t{args.max_seq_length or '未指定'}")
     
     # 训练设置部分
     logger.info("\n训练设置:")
@@ -609,7 +609,10 @@ def print_training_config(args, model_config, train_dataset, eval_dataset, is_di
         logger.info(f"\tLoRA目标模块:\t{args.lora_target_modules}")
     
     # 预计的训练时间
-    tokens_per_step = effective_batch_size * args.max_seq_length
+    # 检查max_seq_length是否为None
+    max_seq_length = args.max_seq_length or 2048  # 默认值如果为None
+    tokens_per_step = effective_batch_size * max_seq_length
+    
     if args.max_steps > 0:
         total_steps = args.max_steps
     else:
@@ -820,11 +823,8 @@ def main():
         optim=args.optim,
 
         # 添加DeepSpeed支持
-        deepspeed=args.deepspeed,
+        deepspeed=args.deepspeed,  
 
-        # 评估配置
-        evaluation_strategy="steps" if eval_dataset else "no",
-        
         # Adam优化器配置
         adam_beta1=0.8,
         adam_beta2=0.99,
