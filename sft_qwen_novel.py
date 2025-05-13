@@ -145,7 +145,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=512,
+        default=2048,
         help="最大序列长度",
     )
     parser.add_argument(
@@ -367,16 +367,6 @@ class CustomDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         batch["labels"] = labels_batch
         return batch
 
-# 自定义 Trainer 以支持梯度裁剪
-class CustomTrainer(Trainer):
-    def training_step(self, model, inputs):
-        # 执行正常训练步骤
-        loss = super().training_step(model, inputs)
-        
-        # 手动裁剪梯度
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
-        return loss
 
 def split_dataset(dataset, eval_ratio=0.1, seed=42, shuffle=True):
     if eval_ratio <= 0 or eval_ratio >= 1:
@@ -497,16 +487,6 @@ def print_training_config(args, model_config, train_dataset, eval_dataset, is_di
     logger.info(separator)
     logger.info("\n")
 
-# 梯度日志回调
-class GradientLoggingCallback(TrainerCallback):
-    def on_step_end(self, args, state, control, model=None, **kwargs):
-        if state.global_step % args.logging_steps == 0:
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    grad_norm = param.grad.norm().item()
-                    logger.info(f"Gradient norm for {name}: {grad_norm}")
-                else:
-                    logger.info(f"No gradient for {name}")
 
 def main():
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
@@ -617,13 +597,12 @@ def main():
     )
     
     try:
-        trainer = CustomTrainer(  # 使用自定义Trainer支持梯度裁剪
+        trainer = Trainer(  # 使用自定义Trainer支持梯度裁剪
             model=model,
             args=training_args,
             data_collator=data_collator,
             train_dataset=train_dataset,
-            eval_dataset=eval_dataset,
-            callbacks=[GradientLoggingCallback()],
+            eval_dataset=eval_dataset
         )
         
         if args.use_wandb and args.wandb_watch != "False" and is_main_process:
