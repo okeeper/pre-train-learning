@@ -416,16 +416,43 @@ class SFTDataset(Dataset):
         # 为标签创建副本
         labels = input_ids.clone()
         
-        # 找到assistant部分的起始位置（根据模板中的格式）
-        # 注意：这种方法依赖于特定的模板格式，如果模板改变，这里需要相应修改
-        assistant_token_id = self.tokenizer.encode("<|im_start|>assistant", add_special_tokens=False)[0]
+        # 尝试查找助手回复的开始位置
+        assistant_start_found = False
         
-        # 寻找assistant标记的位置
-        assistant_pos = (input_ids == assistant_token_id).nonzero(as_tuple=True)[0]
-        if len(assistant_pos) > 0:
-            # 在助手回复前的所有标记设置为-100，表示不计算损失
-            labels[:assistant_pos[-1]] = -100
+        # 1. 尝试使用多种token组合查找助手部分开始位置
+        possible_assistant_tokens = [
+            "<|im_start|>assistant", 
+            "assistant",
+            "<|assistant|>",
+            "<assistant>"
+        ]
         
+        for token_text in possible_assistant_tokens:
+            # 将token文本编码为ID
+            try:
+                token_ids = self.tokenizer.encode(token_text, add_special_tokens=False)
+                if len(token_ids) == 0:
+                    continue
+                    
+                # 对于tokenizer返回多个ID的情况，我们查找第一个ID的位置
+                first_token_id = token_ids[0]
+                positions = (input_ids == first_token_id).nonzero(as_tuple=True)[0]
+                
+                if len(positions) > 0:
+                    # 找到了位置，使用最后一个匹配（通常模板有多个assistant标记时）
+                    assistant_pos = positions[-1]
+                    labels[:assistant_pos] = -100
+                    assistant_start_found = True
+                    break
+            except Exception as e:
+                continue
+        if not assistant_start_found:
+            # 如果仍然没有找到，则使用默认的分割点
+            split_ratio = 0.4
+            split_point = int(len(input_ids) * split_ratio)
+            labels[:split_point] = -100
+            logger.warning("未找到助手回复的开始位置，使用默认的分割点")
+            
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
