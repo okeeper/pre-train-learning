@@ -8,23 +8,14 @@
       "min_loss_scale": 1
   },
 
-  "optimizer": {
-      "type": "AdamW",
-      "params": {
-          "lr": "auto",
-          "betas": "auto", 
-          "eps": "auto",
-          "weight_decay": "auto"
-      }
-  },
-
   "zero_optimization": {
       "stage": 2,
-      "overlap_comm": true,
+      "cpu_offload": true,
       "contiguous_gradients": true,
-      "allgather_bucket_size": 5e8,
-      "reduce_bucket_size": 5e8
+      "overlap_comm": true
   },
+
+  "zero_allow_untested_optimizer": true,
 
   "gradient_accumulation_steps": "auto",
   "gradient_clipping": "auto",
@@ -40,5 +31,10 @@
   
   "data_efficiency": {
     "data_parallel_random_init": true
+  },
+
+  "activation_checkpointing": {
+    "partition_activations": true,
+    "contiguous_memory_optimization": true
   }
 }

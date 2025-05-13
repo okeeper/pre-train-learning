@@ -193,6 +193,7 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --num_train_epochs 1.0 \
   --learning_rate 2e-5 \
   --fp16 \
+  --logging_steps 1 \
   --gradient_checkpointing \
   --use_wandb \
   --deepspeed ds_config.json
@@ -276,19 +277,20 @@ python pretrain_qwen_novel.py \
 # 启用内存优化环境变量
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128"
 
+#   --gradient_checkpointing \
 nohup \
-accelerate launch --config_file accelerate_config.yaml pretrain_qwen_novel.py \
+deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --model_name_or_path /data/hf-models/Qwen3-8B \
   --output_dir output/qwen3_novel_full_pretrain \
   --wandb_name qwen3_novel_full_pretrain \
-  --file_pattern "xd_chunks_512.json" \
-  --per_device_train_batch_size 2 \
-  --gradient_accumulation_steps 16 \
-  --max_seq_length 512 \
+  --file_pattern "pretrain_output/novel_pretrain_data.jsonl" \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 2 \
+  --max_seq_length 4096 \
   --num_train_epochs 1.5 \
-  --learning_rate 1e-7 \
+  --learning_rate 2e-5 \
+  --fp16 \
   --logging_steps 1 \
-  --gradient_checkpointing \
   --use_wandb \
   --deepspeed ds_config.json \
 > /dev/null 2>&1 &
@@ -300,7 +302,7 @@ deepspeed --num_gpus=2 pretrain_qwen_novel.py \
   --wandb_name qwen3_novel_full_pt_1024 \
   --file_pattern "xd_chunks_1024.json" \
   --per_device_train_batch_size 2 \
-  --gradient_accumulation_steps 8 \
+  --gradient_accumulation_steps 4 \
   --logging_steps 1 \
   --max_seq_length 1024 \
   --num_train_epochs 1.0 \

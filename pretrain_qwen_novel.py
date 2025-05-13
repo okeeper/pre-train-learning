@@ -45,6 +45,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+args = None
+
 # 解析命令行参数
 def parse_args():
     parser = argparse.ArgumentParser(description="使用小说数据预训练Qwen模型")
@@ -750,3 +752,6 @@ if __name__ == "__main__":
             torch.cuda.empty_cache()
             
         logger.info("程序退出，资源已清理")
+
+        if args and args.use_wandb:
+            wandb.finish()
