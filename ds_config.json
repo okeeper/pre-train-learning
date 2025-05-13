@@ -18,9 +18,5 @@
     "reduce_scatter": true,
     "reduce_bucket_size": 5e8
   },
-  "communication": {
-    "allreduce_fp16": true,
-    "overlap_comm": true
-  },
   "verbose": true
 }
